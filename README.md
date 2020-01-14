@@ -21,7 +21,6 @@ make deploy IMG=<some-registry>/<project-name>:tag
 make uninstall
 ```
 
-
 # KIND
 ```
 kind create cluster
@@ -53,3 +52,12 @@ kubectl -n kubernetes-dashboard describe secret $(kubectl -n kubernetes-dashboar
 
 kubectl proxy
 ```
+
+# Code references
+
+* Most of the logic for the operator is in `controllers/`
+* Spec definitions are in `api/v1/*_types.go`
+
+# Config samples
+
+* located in `config/samples`

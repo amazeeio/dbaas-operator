@@ -1,0 +1,35 @@
+apiVersion: mariadb.amazee.io/v1
+kind: MariaDBProvider
+metadata:
+  name: mariadbprovider-development-1
+spec:
+  environment: development
+  mariadb_hostname: 10.1.1.200
+  mariadb_readreplica_hostname: 10.1.1.200
+  mariadb_password: password
+  mariadb_port: '3396'
+  mariadb_user: root
+---
+apiVersion: mariadb.amazee.io/v1
+kind: MariaDBProvider
+metadata:
+  name: mariadbprovider-development-2
+spec:
+  environment: development
+  mariadb_hostname: 10.1.1.200
+  mariadb_readreplica_hostname: 10.1.1.200
+  mariadb_password: password
+  mariadb_port: '3386'
+  mariadb_user: root
+---
+apiVersion: mariadb.amazee.io/v1
+kind: MariaDBProvider
+metadata:
+  name: mariadbprovider-production-1
+spec:
+  environment: production
+  mariadb_hostname: db.maria3.com
+  mariadb_readreplica_hostname: db.readreplica.maria3.com
+  mariadb_password: myPassword
+  mariadb_port: '3306'
+  mariadb_user: root

@@ -1,0 +1,65 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.2.4
+  creationTimestamp: null
+  name: mariadbproviders.mariadb.amazee.io
+spec:
+  group: mariadb.amazee.io
+  names:
+    kind: MariaDBProvider
+    listKind: MariaDBProviderList
+    plural: mariadbproviders
+    singular: mariadbprovider
+  scope: Namespaced
+  validation:
+    openAPIV3Schema:
+      description: MariaDBProvider is the Schema for the mariadbproviders API
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          description: MariaDBProviderSpec defines the desired state of MariaDBProvider
+          properties:
+            environment:
+              description: These are the spec options for providers
+              type: string
+            mariadb_hostname:
+              type: string
+            mariadb_password:
+              type: string
+            mariadb_port:
+              type: string
+            mariadb_readreplica_hostname:
+              type: string
+            mariadb_user:
+              type: string
+          type: object
+        status:
+          description: MariaDBProviderStatus defines the observed state of MariaDBProvider
+          type: object
+      type: object
+  version: v1
+  versions:
+  - name: v1
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

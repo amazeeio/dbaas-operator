@@ -1,0 +1,10 @@
+domain: amazee.io
+repo: github.com/amazeeio/dbaas-operator
+resources:
+- group: mariadb
+  kind: MariaDBConsumer
+  version: v1
+- group: mariadb
+  kind: MariaDBProvider
+  version: v1
+version: "2"

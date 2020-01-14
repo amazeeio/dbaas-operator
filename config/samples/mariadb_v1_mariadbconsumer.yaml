@@ -1,0 +1,6 @@
+apiVersion: mariadb.amazee.io/v1
+kind: MariaDBConsumer
+metadata:
+  name: mariadbconsumer-sample
+spec:
+  environment: development

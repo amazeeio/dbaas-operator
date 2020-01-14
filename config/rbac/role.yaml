@@ -1,0 +1,48 @@
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - mariadb.amazee.io
+  resources:
+  - mariadbconsumers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - mariadb.amazee.io
+  resources:
+  - mariadbconsumers/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - mariadb.amazee.io
+  resources:
+  - mariadbproviders
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - mariadb.amazee.io
+  resources:
+  - mariadbproviders/status
+  verbs:
+  - get
+  - patch
+  - update

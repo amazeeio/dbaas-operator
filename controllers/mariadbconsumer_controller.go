@@ -109,6 +109,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 			mariaDBConsumer.Spec.ServiceReadReplicaHostname = "mariadb-readreplica-" + uuid.New().String()
 		}
 		if mariaDBConsumer.Spec.Hostname == "" || mariaDBConsumer.Spec.Port == "" || mariaDBConsumer.Spec.ReadReplicaHostname == "" {
+			// @TODO: make this a log info
 			fmt.Println("we need a database, continue!")
 		} else {
 			// drop out if we have all the options already
@@ -124,7 +125,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 			return ctrl.Result{}, errors.New("No suitable database servers")
 		}
 
-		if err := createDatabaseIfNotExist(provider.Hostname, provider.Username, provider.Password, provider.Port, mariaDBConsumer.Spec.Database); err != nil {
+		if err := createDatabaseIfNotExist(provider.Hostname, provider.Username, provider.Password, provider.Port, mariaDBConsumer.Spec.Database, mariaDBConsumer.Spec.Username, mariaDBConsumer.Spec.Password); err != nil {
 			return ctrl.Result{}, err
 		}
 
@@ -183,7 +184,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		}
 		namespacedName := types.NamespacedName{
 			Namespace: req.Namespace,
-			Name:      "lagoon-env",
+			Name:      "mariadb-operator-credentials",
 		}
 		newVars := map[string]string{
 			"DB_TYPE":              "mariadb",
@@ -194,25 +195,32 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 			"DB_USER":              mariaDBConsumer.Spec.Username,
 			"DB_PASSWORD":          mariaDBConsumer.Spec.Password,
 		}
-		configMap := &corev1.ConfigMap{
+		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      namespacedName.Name,
 				Namespace: namespacedName.Namespace,
 			},
-			Data: map[string]string{"INIT_EMPTY": "yes"},
+			Data: map[string][]byte{},
 		}
+		// configMap := &corev1.ConfigMap{
+		// 	ObjectMeta: metav1.ObjectMeta{
+		// 		Name:      namespacedName.Name,
+		// 		Namespace: namespacedName.Namespace,
+		// 	},
+		// 	Data: map[string]string{"INIT_EMPTY": "yes"},
+		// }
 
-		err = r.Get(context.TODO(), namespacedName, configMap)
+		err = r.Get(context.TODO(), namespacedName, secret)
 		if err != nil {
 			// configMap.Data = newVars
-			if err := r.Create(context.Background(), configMap); err != nil {
+			if err := r.Create(context.Background(), secret); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
 		for mapKey, newVar := range newVars {
-			configMap.Data[mapKey] = newVar
+			secret.Data[mapKey] = []byte(newVar)
 		}
-		if err := r.Update(context.Background(), configMap); err != nil {
+		if err := r.Update(context.Background(), secret); err != nil {
 			return ctrl.Result{}, err
 		}
 		// The object is not being deleted, so if it does not have our finalizer,
@@ -266,7 +274,7 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 	if provider.Hostname == "" {
 		return errors.New("unable to determine server to deprovision from")
 	}
-	err := dropDatabase(provider.Hostname, provider.Username, provider.Password, provider.Port, mariaDBConsumer.Spec.Database)
+	err := dropDatabase(provider.Hostname, provider.Username, provider.Password, provider.Port, mariaDBConsumer.Spec.Database, mariaDBConsumer.Spec.Username)
 	if err != nil {
 		return err
 	}
@@ -290,23 +298,33 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 	if err := r.Delete(context.TODO(), serviceRR); ignoreNotFound(err) != nil {
 		return err
 	}
+	// Delete the secret
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "mariadb-operator-credentials",
+			Namespace: mariaDBConsumer.ObjectMeta.Namespace,
+		},
+	}
+	if err := r.Delete(context.TODO(), secret); ignoreNotFound(err) != nil {
+		return err
+	}
 
 	// Remove our variables from the lagoon-env configmap
-	configMap := &corev1.ConfigMap{}
-	// get the current configmap
-	err = r.Get(context.TODO(), types.NamespacedName{Namespace: mariaDBConsumer.ObjectMeta.Namespace, Name: "lagoon-env"}, configMap)
-	if err != nil {
-		return err
-	}
-	// delete vars from the configmap
-	varNames := []string{"DB_TYPE", "DB_NAME", "DB_HOST", "DB_READREPLICA_HOSTS", "DB_PORT", "DB_USER", "DB_PASSWORD"}
-	for _, varName := range varNames {
-		delete(configMap.Data, varName)
-	}
-	// update the configmap
-	if err := r.Update(context.Background(), configMap); err != nil {
-		return err
-	}
+	// configMap := &corev1.ConfigMap{}
+	// // get the current configmap
+	// err = r.Get(context.TODO(), types.NamespacedName{Namespace: mariaDBConsumer.ObjectMeta.Namespace, Name: "lagoon-env"}, configMap)
+	// if err != nil {
+	// 	return err
+	// }
+	// // delete vars from the configmap
+	// varNames := []string{"DB_TYPE", "DB_NAME", "DB_HOST", "DB_READREPLICA_HOSTS", "DB_PORT", "DB_USER", "DB_PASSWORD"}
+	// for _, varName := range varNames {
+	// 	delete(configMap.Data, varName)
+	// }
+	// // update the configmap
+	// if err := r.Update(context.Background(), configMap); err != nil {
+	// 	return err
+	// }
 	return nil
 }
 
@@ -331,28 +349,41 @@ func randSeq(n int) string {
 	return string(b)
 }
 
-func createDatabaseIfNotExist(hostname string, username string, password string, port string, name string) error {
+func createDatabaseIfNotExist(hostname string, username string, password string, port string, dbName string, dbUser string, dbPass string) error {
 	db, err := sql.Open("mysql", username+":"+password+"@tcp("+hostname+":"+port+")/")
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	_, err = db.Exec("CREATE DATABASE IF NOT EXISTS " + name)
+	_, err = db.Exec("CREATE DATABASE IF NOT EXISTS `" + dbName + "`;")
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec("CREATE USER `" + dbUser + "`@'%' IDENTIFIED BY '" + dbPass + "';")
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec("GRANT ALL ON `" + dbName + "`.* TO `" + dbUser + "`@'%';")
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func dropDatabase(hostname string, username string, password string, port string, name string) error {
+func dropDatabase(hostname string, username string, password string, port string, dbName string, dbUser string) error {
 	db, err := sql.Open("mysql", username+":"+password+"@tcp("+hostname+":"+port+")/")
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	_, err = db.Exec("DROP DATABASE " + name)
+	_, err = db.Exec("DROP DATABASE `" + dbName + "`;")
+	if err != nil {
+		return err
+	}
+	// delete db user
+	_, err = db.Exec("DROP USER `" + dbUser + "`;")
 	if err != nil {
 		return err
 	}

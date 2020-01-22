@@ -79,6 +79,7 @@ const (
 // +kubebuilder:rbac:groups=mariadb.amazee.io,resources=mariadbconsumers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=mariadb.amazee.io,resources=mariadbproviders,verbs=get;list
 // +kubebuilder:rbac:groups=mariadb.amazee.io,resources=mariadbconsumers/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups="",resources=services,verbs=list;get;watch
 
 // Reconcile .
 func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {

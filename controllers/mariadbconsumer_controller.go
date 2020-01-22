@@ -118,9 +118,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 			mariaDBConsumer.Spec.ServiceReadReplicaHostname = "mariadb-readreplica-" + uuid.New().String()
 		}
 		if mariaDBConsumer.Spec.Hostname == "" || mariaDBConsumer.Spec.Port == "" || mariaDBConsumer.Spec.ReadReplicaHostname == "" {
-			// @TODO: make this a log info
-			opLog.Info("we need a database, continuing")
-			// fmt.Println("we need a database, continue!")
+			opLog.Info(fmt.Sprintf("Attempting to create database %s on any usable mariadb provider", mariaDBConsumer.Spec.Database))
 		} else {
 			// drop out if we have all the options already
 			return ctrl.Result{}, nil
@@ -128,11 +126,12 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 
 		// check the providers we have to see who is busy
 		provider := &MariaDBPRoviderInfo{}
-		if err := r.checkMariaDBProviders(provider, &mariaDBConsumer, opLog); err != nil {
+		if err := r.checkMariaDBProviders(provider, &mariaDBConsumer, req.NamespacedName); err != nil {
 			return ctrl.Result{}, err
 		}
 		if provider.Hostname == "" {
-			return ctrl.Result{}, errors.New("No suitable database servers")
+			opLog.Info("No suitable mariadb providers found, bailing")
+			return ctrl.Result{}, nil
 		}
 		consumer := MariaDBConsumerInfo{
 			DatabaseName: mariaDBConsumer.Spec.Database,
@@ -268,6 +267,7 @@ func (r *MariaDBConsumerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mariadbv1.MariaDBConsumer, namespace string) error {
+	opLog := r.Log.WithValues("mariadbconsumer", namespace)
 	//
 	// delete any external resources associated with the mariadbconsumer
 	//
@@ -279,15 +279,15 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 		return err
 	}
 	if provider.Hostname == "" {
-		return errors.New("unable to determine server to deprovision from")
+		return errors.New("Unable to determine server to deprovision from")
 	}
 	consumer := MariaDBConsumerInfo{
 		DatabaseName: mariaDBConsumer.Spec.Database,
 		Username:     mariaDBConsumer.Spec.Username,
 		Password:     mariaDBConsumer.Spec.Password,
 	}
-	err := dropDatabase(*provider, consumer)
-	if err != nil {
+	opLog.Info(fmt.Sprintf("Dropping database %s on host %s", consumer.DatabaseName, provider.Hostname))
+	if err := dropDatabase(*provider, consumer); err != nil {
 		return err
 	}
 	// Delete the primary
@@ -297,6 +297,7 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 			Namespace: mariaDBConsumer.ObjectMeta.Namespace,
 		},
 	}
+	opLog.Info(fmt.Sprintf("Deleting service %s in namespace %s", service.ObjectMeta.Name, service.ObjectMeta.Namespace))
 	if err := r.Delete(context.TODO(), service); ignoreNotFound(err) != nil {
 		return err
 	}
@@ -307,6 +308,7 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 			Namespace: mariaDBConsumer.ObjectMeta.Namespace,
 		},
 	}
+	opLog.Info(fmt.Sprintf("Deleting service %s in namespace %s", serviceRR.ObjectMeta.Name, serviceRR.ObjectMeta.Namespace))
 	if err := r.Delete(context.TODO(), serviceRR); ignoreNotFound(err) != nil {
 		return err
 	}
@@ -317,6 +319,7 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 			Namespace: mariaDBConsumer.ObjectMeta.Namespace,
 		},
 	}
+	opLog.Info(fmt.Sprintf("Deleting secret %s in namespace %s", secret.ObjectMeta.Name, secret.ObjectMeta.Namespace))
 	if err := r.Delete(context.TODO(), secret); ignoreNotFound(err) != nil {
 		return err
 	}
@@ -345,7 +348,6 @@ func randSeq(n int) string {
 }
 
 func createDatabaseIfNotExist(provider MariaDBPRoviderInfo, consumer MariaDBConsumerInfo) error {
-	fmt.Println(provider, consumer)
 	db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
 	if err != nil {
 		return err
@@ -394,13 +396,19 @@ func dropDatabase(provider MariaDBPRoviderInfo, consumer MariaDBConsumerInfo) er
 	return nil
 }
 
-// check the status of the mariadb provider and return true/false if we can use it
-func checkMariaDBStatus(provider MariaDBPRoviderInfo, opLog logr.Logger) (bool, error) {
-	db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
-	if err != nil {
-		return false, err
-	}
-	defer db.Close()
+// check the usage of the mariadb provider and return true/false if we can use it
+func checkMariaDBUsage(provider MariaDBPRoviderInfo, opLog logr.Logger) (bool, error) {
+	opLog.Info(fmt.Sprintf("Checking usage of database server is not currently configured, proceeding to use %s", provider.Hostname))
+	// @TODO: once the logic around determining which database to use if more than one of a specific type is defined in a MariaDBProvider kind
+	// @TODO: the commented code in this block can be re-evaluated
+
+	/*
+		// db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
+		// if err != nil {
+		// 	return false, err
+		// }
+		// defer db.Close()
+	*/
 
 	// result, err := db.Query("show status like 'Qcache_queries_in_cache';")
 	// result, err := db.Query("show status like 'Uptime_since_flush_status';")
@@ -418,27 +426,29 @@ func checkMariaDBStatus(provider MariaDBPRoviderInfo, opLog logr.Logger) (bool, 
 	// 		return false, nil
 	// 	}
 	// }
-	result, err := db.Query("SELECT COUNT(*) FROM information_schema.SCHEMATA")
-	if err != nil {
-		return false, err
-	}
-	for result.Next() {
-		var value int
-		err = result.Scan(&value)
-		if err != nil {
-			return false, err
-		}
-		opLog.Info("database count on", provider.Hostname, provider.Port, "is", value)
-		// fmt.Println("database count on", provider.Hostname, provider.Port, "is", value)
-		if value > 10 {
-			return false, nil
-		}
-	}
+
+	/*
+		// result, err := db.Query("SELECT COUNT(*) FROM information_schema.SCHEMATA")
+		// if err != nil {
+		// 	return false, err
+		// }
+		// for result.Next() {
+		// 	var value int
+		// 	err = result.Scan(&value)
+		// 	if err != nil {
+		// 		return false, err
+		// 	}
+		// 	opLog.Info("Database count on host %s has reached %v", provider.Hostname, value)
+		// 	if value > 50 {
+		// 		return false, nil
+		// 	}
+		// }
+	*/
 	return true, nil
 }
 
 // grab all the MariaDBProvider kinds and check each one
-func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *MariaDBPRoviderInfo, mariaDBConsumer *mariadbv1.MariaDBConsumer, opLog logr.Logger) error {
+func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *MariaDBPRoviderInfo, mariaDBConsumer *mariadbv1.MariaDBConsumer, namespaceName types.NamespacedName) error {
 	providers := &mariadbv1.MariaDBProviderList{}
 	src := providers.DeepCopyObject()
 	if err := r.List(context.TODO(), src.(*mariadbv1.MariaDBProviderList)); err != nil {
@@ -453,8 +463,7 @@ func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *MariaDBPRovi
 				Password: v.Spec.Password,
 				Port:     v.Spec.Port,
 			}
-			useMe, err := checkMariaDBStatus(mDBProvider, opLog)
-			fmt.Println(useMe, provider)
+			useMe, err := checkMariaDBUsage(mDBProvider, r.Log.WithValues("mariadbconsumer", namespaceName))
 			if err != nil {
 				return err
 			}

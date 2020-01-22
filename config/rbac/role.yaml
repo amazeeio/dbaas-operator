@@ -9,10 +9,26 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - services
+  - secrets
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - mariadb.amazee.io

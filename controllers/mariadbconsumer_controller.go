@@ -62,6 +62,13 @@ type MariaDBPRoviderInfo struct {
 	Port                string
 }
 
+// MariaDBConsumerInfo .
+type MariaDBConsumerInfo struct {
+	DatabaseName string
+	Username     string
+	Password     string
+}
+
 const (
 	// LabelAppName for discovery.
 	LabelAppName = "app_name"
@@ -76,7 +83,7 @@ const (
 // Reconcile .
 func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	_ = r.Log.WithValues("mariadbconsumer", req.NamespacedName)
+	opLog := r.Log.WithValues("mariadbconsumer", req.NamespacedName)
 
 	var mariaDBConsumer mariadbv1.MariaDBConsumer
 	if err := r.Get(ctx, req.NamespacedName, &mariaDBConsumer); err != nil {
@@ -110,7 +117,8 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		}
 		if mariaDBConsumer.Spec.Hostname == "" || mariaDBConsumer.Spec.Port == "" || mariaDBConsumer.Spec.ReadReplicaHostname == "" {
 			// @TODO: make this a log info
-			fmt.Println("we need a database, continue!")
+			opLog.Info("we need a database, continuing")
+			// fmt.Println("we need a database, continue!")
 		} else {
 			// drop out if we have all the options already
 			return ctrl.Result{}, nil
@@ -118,14 +126,19 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 
 		// check the providers we have to see who is busy
 		provider := &MariaDBPRoviderInfo{}
-		if err := r.checkMariaDBProviders(provider, &mariaDBConsumer); err != nil {
+		if err := r.checkMariaDBProviders(provider, &mariaDBConsumer, opLog); err != nil {
 			return ctrl.Result{}, err
 		}
 		if provider.Hostname == "" {
 			return ctrl.Result{}, errors.New("No suitable database servers")
 		}
+		consumer := MariaDBConsumerInfo{
+			DatabaseName: mariaDBConsumer.Spec.Database,
+			Username:     mariaDBConsumer.Spec.Username,
+			Password:     mariaDBConsumer.Spec.Password,
+		}
 
-		if err := createDatabaseIfNotExist(provider.Hostname, provider.Username, provider.Password, provider.Port, mariaDBConsumer.Spec.Database, mariaDBConsumer.Spec.Username, mariaDBConsumer.Spec.Password); err != nil {
+		if err := createDatabaseIfNotExist(*provider, consumer); err != nil {
 			return ctrl.Result{}, err
 		}
 
@@ -202,23 +215,15 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 			},
 			Data: map[string][]byte{},
 		}
-		// configMap := &corev1.ConfigMap{
-		// 	ObjectMeta: metav1.ObjectMeta{
-		// 		Name:      namespacedName.Name,
-		// 		Namespace: namespacedName.Namespace,
-		// 	},
-		// 	Data: map[string]string{"INIT_EMPTY": "yes"},
-		// }
+		for mapKey, newVar := range newVars {
+			secret.Data[mapKey] = []byte(newVar)
+		}
 
 		err = r.Get(context.TODO(), namespacedName, secret)
 		if err != nil {
-			// configMap.Data = newVars
 			if err := r.Create(context.Background(), secret); err != nil {
 				return ctrl.Result{}, err
 			}
-		}
-		for mapKey, newVar := range newVars {
-			secret.Data[mapKey] = []byte(newVar)
 		}
 		if err := r.Update(context.Background(), secret); err != nil {
 			return ctrl.Result{}, err
@@ -274,7 +279,12 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 	if provider.Hostname == "" {
 		return errors.New("unable to determine server to deprovision from")
 	}
-	err := dropDatabase(provider.Hostname, provider.Username, provider.Password, provider.Port, mariaDBConsumer.Spec.Database, mariaDBConsumer.Spec.Username)
+	consumer := MariaDBConsumerInfo{
+		DatabaseName: mariaDBConsumer.Spec.Database,
+		Username:     mariaDBConsumer.Spec.Username,
+		Password:     mariaDBConsumer.Spec.Password,
+	}
+	err := dropDatabase(*provider, consumer)
 	if err != nil {
 		return err
 	}
@@ -308,23 +318,6 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 	if err := r.Delete(context.TODO(), secret); ignoreNotFound(err) != nil {
 		return err
 	}
-
-	// Remove our variables from the lagoon-env configmap
-	// configMap := &corev1.ConfigMap{}
-	// // get the current configmap
-	// err = r.Get(context.TODO(), types.NamespacedName{Namespace: mariaDBConsumer.ObjectMeta.Namespace, Name: "lagoon-env"}, configMap)
-	// if err != nil {
-	// 	return err
-	// }
-	// // delete vars from the configmap
-	// varNames := []string{"DB_TYPE", "DB_NAME", "DB_HOST", "DB_READREPLICA_HOSTS", "DB_PORT", "DB_USER", "DB_PASSWORD"}
-	// for _, varName := range varNames {
-	// 	delete(configMap.Data, varName)
-	// }
-	// // update the configmap
-	// if err := r.Update(context.Background(), configMap); err != nil {
-	// 	return err
-	// }
 	return nil
 }
 
@@ -349,41 +342,50 @@ func randSeq(n int) string {
 	return string(b)
 }
 
-func createDatabaseIfNotExist(hostname string, username string, password string, port string, dbName string, dbUser string, dbPass string) error {
-	db, err := sql.Open("mysql", username+":"+password+"@tcp("+hostname+":"+port+")/")
+func createDatabaseIfNotExist(provider MariaDBPRoviderInfo, consumer MariaDBConsumerInfo) error {
+	fmt.Println(provider, consumer)
+	db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	_, err = db.Exec("CREATE DATABASE IF NOT EXISTS `" + dbName + "`;")
+	_, err = db.Exec("CREATE DATABASE IF NOT EXISTS `" + consumer.DatabaseName + "`;")
 	if err != nil {
 		return err
 	}
-	_, err = db.Exec("CREATE USER `" + dbUser + "`@'%' IDENTIFIED BY '" + dbPass + "';")
+	_, err = db.Exec("CREATE USER `" + consumer.Username + "`@'%' IDENTIFIED BY '" + consumer.Password + "';")
 	if err != nil {
 		return err
 	}
-	_, err = db.Exec("GRANT ALL ON `" + dbName + "`.* TO `" + dbUser + "`@'%';")
+	_, err = db.Exec("GRANT ALL ON `" + consumer.DatabaseName + "`.* TO `" + consumer.Username + "`@'%';")
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec("FLUSH PRIVILEGES;")
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func dropDatabase(hostname string, username string, password string, port string, dbName string, dbUser string) error {
-	db, err := sql.Open("mysql", username+":"+password+"@tcp("+hostname+":"+port+")/")
+func dropDatabase(provider MariaDBPRoviderInfo, consumer MariaDBConsumerInfo) error {
+	db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	_, err = db.Exec("DROP DATABASE `" + dbName + "`;")
+	_, err = db.Exec("DROP DATABASE `" + consumer.DatabaseName + "`;")
 	if err != nil {
 		return err
 	}
 	// delete db user
-	_, err = db.Exec("DROP USER `" + dbUser + "`;")
+	_, err = db.Exec("DROP USER `" + consumer.Username + "`;")
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec("FLUSH PRIVILEGES;")
 	if err != nil {
 		return err
 	}
@@ -391,8 +393,8 @@ func dropDatabase(hostname string, username string, password string, port string
 }
 
 // check the status of the mariadb provider and return true/false if we can use it
-func checkMariaDBStatus(hostname string, username string, password string, port string) (bool, error) {
-	db, err := sql.Open("mysql", username+":"+password+"@tcp("+hostname+":"+port+")/")
+func checkMariaDBStatus(provider MariaDBPRoviderInfo, opLog logr.Logger) (bool, error) {
+	db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
 	if err != nil {
 		return false, err
 	}
@@ -424,7 +426,8 @@ func checkMariaDBStatus(hostname string, username string, password string, port 
 		if err != nil {
 			return false, err
 		}
-		fmt.Println("database count on", hostname, port, "is", value)
+		opLog.Info("database count on", provider.Hostname, provider.Port, "is", value)
+		// fmt.Println("database count on", provider.Hostname, provider.Port, "is", value)
 		if value > 10 {
 			return false, nil
 		}
@@ -433,7 +436,7 @@ func checkMariaDBStatus(hostname string, username string, password string, port 
 }
 
 // grab all the MariaDBProvider kinds and check each one
-func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *MariaDBPRoviderInfo, mariaDBConsumer *mariadbv1.MariaDBConsumer) error {
+func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *MariaDBPRoviderInfo, mariaDBConsumer *mariadbv1.MariaDBConsumer, opLog logr.Logger) error {
 	providers := &mariadbv1.MariaDBProviderList{}
 	src := providers.DeepCopyObject()
 	if err := r.List(context.TODO(), src.(*mariadbv1.MariaDBProviderList)); err != nil {
@@ -442,7 +445,14 @@ func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *MariaDBPRovi
 	providersList := src.(*mariadbv1.MariaDBProviderList)
 	for _, v := range providersList.Items {
 		if v.Spec.Environment == mariaDBConsumer.Spec.Environment {
-			useMe, err := checkMariaDBStatus(v.Spec.Hostname, v.Spec.Username, v.Spec.Password, v.Spec.Port)
+			mDBProvider := MariaDBPRoviderInfo{
+				Hostname: v.Spec.Hostname,
+				Username: v.Spec.Username,
+				Password: v.Spec.Password,
+				Port:     v.Spec.Port,
+			}
+			useMe, err := checkMariaDBStatus(mDBProvider, opLog)
+			fmt.Println(useMe, provider)
 			if err != nil {
 				return err
 			}

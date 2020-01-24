@@ -69,6 +69,12 @@ type MariaDBConsumerInfo struct {
 	Password     string
 }
 
+// MariaDBUsage .
+type MariaDBUsage struct {
+	SchemaCount int
+	TableCount  int
+}
+
 const (
 	// LabelAppName for discovery.
 	LabelAppName = "app_name"
@@ -397,87 +403,112 @@ func dropDatabase(provider MariaDBPRoviderInfo, consumer MariaDBConsumerInfo) er
 }
 
 // check the usage of the mariadb provider and return true/false if we can use it
-func checkMariaDBUsage(provider MariaDBPRoviderInfo, opLog logr.Logger) (bool, error) {
+func getMariaDBUsage(provider MariaDBPRoviderInfo, opLog logr.Logger) (MariaDBUsage, error) {
 	opLog.Info(fmt.Sprintf("Checking usage of database server is not currently configured, proceeding to use %s", provider.Hostname))
-	// @TODO: once the logic around determining which database to use if more than one of a specific type is defined in a MariaDBProvider kind
-	// @TODO: the commented code in this block can be re-evaluated
 
-	/*
-		// db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
-		// if err != nil {
-		// 	return false, err
-		// }
-		// defer db.Close()
-	*/
+	currentUsage := MariaDBUsage{
+		SchemaCount: 0,
+		TableCount:  0,
+	}
 
-	// result, err := db.Query("show status like 'Qcache_queries_in_cache';")
-	// result, err := db.Query("show status like 'Uptime_since_flush_status';")
-	// if err != nil {
-	// 	return false, err
-	// }
-	// for result.Next() {
-	// 	var name, value string
-	// 	err = result.Scan(&name, &value)
-	// 	if err != nil {
-	// 		return false, err
-	// 	}
-	// 	fmt.Println(name, value)
-	// 	if value > "9000" {
-	// 		return false, nil
-	// 	}
-	// }
+	db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
+	if err != nil {
+		return currentUsage, err
+	}
+	defer db.Close()
 
-	/*
-		// result, err := db.Query("SELECT COUNT(*) FROM information_schema.SCHEMATA")
-		// if err != nil {
-		// 	return false, err
-		// }
-		// for result.Next() {
-		// 	var value int
-		// 	err = result.Scan(&value)
-		// 	if err != nil {
-		// 		return false, err
-		// 	}
-		// 	opLog.Info("Database count on host %s has reached %v", provider.Hostname, value)
-		// 	if value > 50 {
-		// 		return false, nil
-		// 	}
-		// }
-	*/
-	return true, nil
+	result, err := db.Query(`SELECT COUNT(1) AS TableCount
+                            FROM information_schema.tables
+                            WHERE table_schema NOT IN ('information_schema','mysql', 'sys');`)
+	if err != nil {
+		return currentUsage, err
+	}
+	for result.Next() {
+		var value int
+		err = result.Scan(&value)
+		if err != nil {
+			return currentUsage, err
+		}
+		opLog.Info(fmt.Sprintf("Table count on host %s has reached %v", provider.Hostname, value))
+		currentUsage.TableCount = value
+	}
+
+	result, err = db.Query(`SELECT COUNT(*) AS SchemaCount
+	                        FROM information_schema.SCHEMATA
+	                        WHERE schema_name NOT IN ('information_schema','mysql', 'sys');`)
+	if err != nil {
+		return currentUsage, err
+	}
+	for result.Next() {
+		var value int
+		err = result.Scan(&value)
+		if err != nil {
+			return currentUsage, err
+		}
+		opLog.Info(fmt.Sprintf("Schema count on host %s has reached %v", provider.Hostname, value))
+		currentUsage.SchemaCount = value
+	}
+
+	return currentUsage, nil
 }
 
-// grab all the MariaDBProvider kinds and check each one
+// Grab all the MariaDBProvider kinds and check each one
 func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *MariaDBPRoviderInfo, mariaDBConsumer *mariadbv1.MariaDBConsumer, namespaceName types.NamespacedName) error {
+	opLog := r.Log.WithValues("mariadbconsumer", namespaceName)
 	providers := &mariadbv1.MariaDBProviderList{}
 	src := providers.DeepCopyObject()
 	if err := r.List(context.TODO(), src.(*mariadbv1.MariaDBProviderList)); err != nil {
 		return err
 	}
 	providersList := src.(*mariadbv1.MariaDBProviderList)
+
+	// We need to loop around all available providers to check their current
+	// usage.
+	// @TODO make this more complex and use more usage data in the calculation.
+	// @TODO use the name of the provider in the log statement (not just the
+	// hostname).
+	var bestHostname string
+	lowestTableCount := -1
 	for _, v := range providersList.Items {
 		if v.Spec.Environment == mariaDBConsumer.Spec.Environment {
+			// Form a temporary connection object.
 			mDBProvider := MariaDBPRoviderInfo{
 				Hostname: v.Spec.Hostname,
 				Username: v.Spec.Username,
 				Password: v.Spec.Password,
 				Port:     v.Spec.Port,
 			}
-			useMe, err := checkMariaDBUsage(mDBProvider, r.Log.WithValues("mariadbconsumer", namespaceName))
+			currentUsage, err := getMariaDBUsage(mDBProvider, r.Log.WithValues("mariadbconsumer", namespaceName))
 			if err != nil {
 				return err
 			}
-			if useMe {
-				provider.Hostname = v.Spec.Hostname
-				provider.ReadReplicaHostname = v.Spec.ReadReplicaHostname
-				provider.Username = v.Spec.Username
-				provider.Password = v.Spec.Password
-				provider.Port = v.Spec.Port
-				return nil
+
+			if lowestTableCount < 0 || currentUsage.TableCount < lowestTableCount {
+				bestHostname = v.Spec.Hostname
+				lowestTableCount = currentUsage.TableCount
 			}
 		}
 	}
-	return errors.New("no suitable usable database servers")
+
+	opLog.Info(fmt.Sprintf("Best database hostname %s has the lowest table count %v", bestHostname, lowestTableCount))
+
+	// After working out the lowest usage database, return it.
+	if bestHostname != "" {
+		for _, v := range providersList.Items {
+			if v.Spec.Environment == mariaDBConsumer.Spec.Environment {
+				if bestHostname == v.Spec.Hostname {
+					provider.Hostname = v.Spec.Hostname
+					provider.ReadReplicaHostname = v.Spec.ReadReplicaHostname
+					provider.Username = v.Spec.Username
+					provider.Password = v.Spec.Password
+					provider.Port = v.Spec.Port
+					return nil
+				}
+			}
+		}
+	}
+
+	return errors.New("No suitable usable database servers")
 }
 
 // get info for just one of the providers

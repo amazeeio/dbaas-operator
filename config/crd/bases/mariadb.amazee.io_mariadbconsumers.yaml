@@ -49,6 +49,8 @@ spec:
               type: string
             mariadb_user:
               type: string
+            secret:
+              type: string
             service_mariadb_hostname:
               type: string
             service_mariadb_readreplica_hostname:

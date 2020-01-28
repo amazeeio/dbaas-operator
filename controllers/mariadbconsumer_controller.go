@@ -51,6 +51,7 @@ type MariaDBConsumerReconciler struct {
 	Password                   string
 	Port                       string
 	Username                   string
+	Secret                     string
 }
 
 // MariaDBPRoviderInfo .
@@ -77,9 +78,11 @@ type MariaDBUsage struct {
 
 const (
 	// LabelAppName for discovery.
-	LabelAppName = "app_name"
+	LabelAppName = "mariadb.amazee.io/service-name"
 	// LabelAppType for discovery.
-	LabelAppType = "app_type"
+	LabelAppType = "mariadb.amazee.io/type"
+	// LabelAppManaged for discovery.
+	LabelAppManaged = "mariadb.amazee.io/managed-by"
 )
 
 // +kubebuilder:rbac:groups=mariadb.amazee.io,resources=mariadbconsumers,verbs=get;list;watch;create;update;patch;delete
@@ -101,28 +104,33 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 	finalizerName := "finalizer.consumer.mariadb.amazee.io/v1"
 
 	labels := map[string]string{
-		LabelAppName: mariaDBConsumer.ObjectMeta.Name,
-		LabelAppType: "mariadb-consumer",
+		LabelAppName:    mariaDBConsumer.ObjectMeta.Name,
+		LabelAppType:    "mariadbconsumer",
+		LabelAppManaged: "dbaas-operator",
 	}
 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if mariaDBConsumer.ObjectMeta.DeletionTimestamp.IsZero() {
 		// set up the new credentials
 		if mariaDBConsumer.Spec.ServiceHostname == "" {
-			mariaDBConsumer.Spec.ServiceHostname = "mariadb-" + uuid.New().String()
+			mariaDBConsumer.Spec.ServiceHostname = req.Name + "-" + uuid.New().String()
 		}
 		if mariaDBConsumer.Spec.Database == "" {
-			mariaDBConsumer.Spec.Database = truncateString(req.NamespacedName.Namespace, 50) + "_" + randSeq(5)
+			mariaDBConsumer.Spec.Database = truncateString(req.NamespacedName.Namespace, 50) + "_" + randSeq(5, false)
 		}
 		if mariaDBConsumer.Spec.Username == "" {
-			mariaDBConsumer.Spec.Username = truncateString(req.NamespacedName.Namespace, 10) + "_" + randSeq(5)
+			mariaDBConsumer.Spec.Username = truncateString(req.NamespacedName.Namespace, 10) + "_" + randSeq(5, false)
+		}
+		if mariaDBConsumer.Spec.Secret == "" {
+			mariaDBConsumer.Spec.Secret = req.Name + "-credentials-" + randSeq(5, true)
 		}
 		if mariaDBConsumer.Spec.Password == "" {
-			mariaDBConsumer.Spec.Password = randSeq(24)
+			mariaDBConsumer.Spec.Password = randSeq(24, false)
 		}
 		if mariaDBConsumer.Spec.ServiceReadReplicaHostname == "" {
-			mariaDBConsumer.Spec.ServiceReadReplicaHostname = "mariadb-readreplica-" + uuid.New().String()
+			mariaDBConsumer.Spec.ServiceReadReplicaHostname = req.Name + "-readreplica-" + uuid.New().String()
 		}
+
 		if mariaDBConsumer.Spec.Hostname == "" || mariaDBConsumer.Spec.Port == "" || mariaDBConsumer.Spec.ReadReplicaHostname == "" {
 			opLog.Info(fmt.Sprintf("Attempting to create database %s on any usable mariadb provider", mariaDBConsumer.Spec.Database))
 		} else {
@@ -204,7 +212,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		}
 		namespacedName := types.NamespacedName{
 			Namespace: req.Namespace,
-			Name:      "mariadb-operator-credentials",
+			Name:      mariaDBConsumer.Spec.Secret,
 		}
 		newVars := map[string]string{
 			"DB_TYPE":              "mariadb",
@@ -218,6 +226,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      namespacedName.Name,
+				Labels:    labels,
 				Namespace: namespacedName.Namespace,
 			},
 			Data: map[string][]byte{},
@@ -321,7 +330,7 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 	// Delete the secret
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "mariadb-operator-credentials",
+			Name:      mariaDBConsumer.Spec.Secret,
 			Namespace: mariaDBConsumer.ObjectMeta.Namespace,
 		},
 	}
@@ -343,12 +352,17 @@ func truncateString(str string, num int) string {
 	return bnoden
 }
 
-var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
+var alphaNumeric = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
+var dnsCompliantAlphaNumeric = []rune("abcdefghijklmnopqrstuvwxyz1234567890")
 
-func randSeq(n int) string {
+func randSeq(n int, dns bool) string {
 	b := make([]rune, n)
 	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
+		if dns {
+			b[i] = dnsCompliantAlphaNumeric[rand.Intn(len(dnsCompliantAlphaNumeric))]
+		} else {
+			b[i] = alphaNumeric[rand.Intn(len(alphaNumeric))]
+		}
 	}
 	return string(b)
 }
@@ -404,8 +418,6 @@ func dropDatabase(provider MariaDBPRoviderInfo, consumer MariaDBConsumerInfo) er
 
 // check the usage of the mariadb provider and return true/false if we can use it
 func getMariaDBUsage(provider MariaDBPRoviderInfo, opLog logr.Logger) (MariaDBUsage, error) {
-	opLog.Info(fmt.Sprintf("Checking usage of database server is not currently configured, proceeding to use %s", provider.Hostname))
-
 	currentUsage := MariaDBUsage{
 		SchemaCount: 0,
 		TableCount:  0,

@@ -34,26 +34,49 @@ spec:
         spec:
           description: MariaDBConsumerSpec defines the desired state of MariaDBConsumer
           properties:
+            consumer:
+              description: MariaDBConsumerData defines the provider link for this
+                consumer
+              properties:
+                database:
+                  type: string
+                password:
+                  type: string
+                services:
+                  description: MariaDBConsumerServices defines the provider link for
+                    this consumer
+                  properties:
+                    primary:
+                      type: string
+                    replicas:
+                      items:
+                        type: string
+                      type: array
+                  type: object
+                username:
+                  type: string
+              type: object
             environment:
               description: These are the spec options for consumers
               type: string
-            mariadb_database:
-              type: string
-            mariadb_hostname:
-              type: string
-            mariadb_password:
-              type: string
-            mariadb_port:
-              type: string
-            mariadb_readreplica_hostname:
-              type: string
-            mariadb_user:
-              type: string
+            provider:
+              description: MariaDBConsumerProvider defines the provider link for this
+                consumer
+              properties:
+                hostname:
+                  type: string
+                name:
+                  type: string
+                namespace:
+                  type: string
+                port:
+                  type: string
+                readreplicas:
+                  items:
+                    type: string
+                  type: array
+              type: object
             secret:
-              type: string
-            service_mariadb_hostname:
-              type: string
-            service_mariadb_readreplica_hostname:
               type: string
           type: object
         status:

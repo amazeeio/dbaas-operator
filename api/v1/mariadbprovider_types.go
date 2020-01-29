@@ -28,12 +28,12 @@ type MariaDBProviderSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// These are the spec options for providers
-	Environment         string `json:"environment,omitempty"`
-	Hostname            string `json:"mariadb_hostname,omitempty"`
-	ReadReplicaHostname string `json:"mariadb_readreplica_hostname,omitempty"`
-	Password            string `json:"mariadb_password,omitempty"`
-	Port                string `json:"mariadb_port,omitempty"`
-	Username            string `json:"mariadb_user,omitempty"`
+	Environment          string   `json:"environment,omitempty"`
+	Hostname             string   `json:"hostname,omitempty"`
+	ReadReplicaHostnames []string `json:"readreplica_hostnames,omitempty"`
+	Password             string   `json:"password,omitempty"`
+	Port                 string   `json:"port,omitempty"`
+	Username             string   `json:"user,omitempty"`
 }
 
 // MariaDBProviderStatus defines the observed state of MariaDBProvider

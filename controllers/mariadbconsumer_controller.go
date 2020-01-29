@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
@@ -52,15 +53,30 @@ type MariaDBConsumerReconciler struct {
 	Port                       string
 	Username                   string
 	Secret                     string
+	Provider                   struct {
+		Name      string
+		Namespace string
+	}
+	Consumer struct {
+		Database string
+		Password string
+		Username string
+		Services struct {
+			ServiceHostname            string
+			ServiceReadReplicaHostname string
+		}
+	}
 }
 
 // MariaDBPRoviderInfo .
 type MariaDBPRoviderInfo struct {
-	Hostname            string
-	ReadReplicaHostname string
-	Username            string
-	Password            string
-	Port                string
+	Hostname             string
+	ReadReplicaHostnames []string
+	Username             string
+	Password             string
+	Port                 string
+	Name                 string
+	Namespace            string
 }
 
 // MariaDBConsumerInfo .
@@ -112,76 +128,80 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 	// examine DeletionTimestamp to determine if object is under deletion
 	if mariaDBConsumer.ObjectMeta.DeletionTimestamp.IsZero() {
 		// set up the new credentials
-		if mariaDBConsumer.Spec.ServiceHostname == "" {
-			mariaDBConsumer.Spec.ServiceHostname = req.Name + "-" + uuid.New().String()
-		}
-		if mariaDBConsumer.Spec.Database == "" {
-			mariaDBConsumer.Spec.Database = truncateString(req.NamespacedName.Namespace, 50) + "_" + randSeq(5, false)
-		}
-		if mariaDBConsumer.Spec.Username == "" {
-			mariaDBConsumer.Spec.Username = truncateString(req.NamespacedName.Namespace, 10) + "_" + randSeq(5, false)
-		}
 		if mariaDBConsumer.Spec.Secret == "" {
 			mariaDBConsumer.Spec.Secret = req.Name + "-credentials-" + randSeq(5, true)
 		}
-		if mariaDBConsumer.Spec.Password == "" {
-			mariaDBConsumer.Spec.Password = randSeq(24, false)
+		if mariaDBConsumer.Spec.Consumer.Database == "" {
+			mariaDBConsumer.Spec.Consumer.Database = truncateString(req.NamespacedName.Namespace, 50) + "_" + randSeq(5, false)
 		}
-		if mariaDBConsumer.Spec.ServiceReadReplicaHostname == "" {
-			mariaDBConsumer.Spec.ServiceReadReplicaHostname = req.Name + "-readreplica-" + uuid.New().String()
+		if mariaDBConsumer.Spec.Consumer.Username == "" {
+			mariaDBConsumer.Spec.Consumer.Username = truncateString(req.NamespacedName.Namespace, 10) + "_" + randSeq(5, false)
+		}
+		if mariaDBConsumer.Spec.Consumer.Password == "" {
+			mariaDBConsumer.Spec.Consumer.Password = randSeq(24, false)
+		}
+		if mariaDBConsumer.Spec.Consumer.Services.Primary == "" {
+			mariaDBConsumer.Spec.Consumer.Services.Primary = req.Name + "-" + uuid.New().String()
 		}
 
-		if mariaDBConsumer.Spec.Hostname == "" || mariaDBConsumer.Spec.Port == "" || mariaDBConsumer.Spec.ReadReplicaHostname == "" {
-			opLog.Info(fmt.Sprintf("Attempting to create database %s on any usable mariadb provider", mariaDBConsumer.Spec.Database))
-		} else {
-			// drop out if we have all the options already
-			return ctrl.Result{}, nil
-		}
-
-		// check the providers we have to see who is busy
 		provider := &MariaDBPRoviderInfo{}
-		if err := r.checkMariaDBProviders(provider, &mariaDBConsumer, req.NamespacedName); err != nil {
-			return ctrl.Result{}, err
-		}
-		if provider.Hostname == "" {
-			opLog.Info("No suitable mariadb providers found, bailing")
-			return ctrl.Result{}, nil
-		}
-		consumer := MariaDBConsumerInfo{
-			DatabaseName: mariaDBConsumer.Spec.Database,
-			Username:     mariaDBConsumer.Spec.Username,
-			Password:     mariaDBConsumer.Spec.Password,
+		// if we haven't got any provider specific information pre-defined, we should query the providers to get one
+		if mariaDBConsumer.Spec.Provider.Hostname == "" || mariaDBConsumer.Spec.Provider.Port == "" || len(mariaDBConsumer.Spec.Provider.ReadReplicaHostnames) == 0 {
+			opLog.Info(fmt.Sprintf("Attempting to create database %s on any usable mariadb provider", mariaDBConsumer.Spec.Consumer.Database))
+			// check the providers we have to see who is busy
+			if err := r.checkMariaDBProviders(provider, &mariaDBConsumer, req.NamespacedName); err != nil {
+				return ctrl.Result{}, err
+			}
+			if provider.Hostname == "" {
+				opLog.Info("No suitable mariadb providers found, bailing")
+				return ctrl.Result{}, nil
+			}
+
+			consumer := MariaDBConsumerInfo{
+				DatabaseName: mariaDBConsumer.Spec.Consumer.Database,
+				Username:     mariaDBConsumer.Spec.Consumer.Username,
+				Password:     mariaDBConsumer.Spec.Consumer.Password,
+			}
+
+			if err := createDatabaseIfNotExist(*provider, consumer); err != nil {
+				return ctrl.Result{}, err
+			}
+
+			// populate with provider host information. we don't expose provider credentials here
+			if mariaDBConsumer.Spec.Provider.Hostname == "" {
+				mariaDBConsumer.Spec.Provider.Hostname = provider.Hostname
+			}
+			if mariaDBConsumer.Spec.Provider.Port == "" {
+				mariaDBConsumer.Spec.Provider.Port = provider.Port
+			}
+			if len(mariaDBConsumer.Spec.Provider.ReadReplicaHostnames) == 0 {
+				for _, replica := range provider.ReadReplicaHostnames {
+					mariaDBConsumer.Spec.Provider.ReadReplicaHostnames = append(mariaDBConsumer.Spec.Provider.ReadReplicaHostnames, replica)
+				}
+			}
+			if mariaDBConsumer.Spec.Provider.Name == "" {
+				mariaDBConsumer.Spec.Provider.Name = provider.Name
+			}
+			if mariaDBConsumer.Spec.Provider.Namespace == "" {
+				mariaDBConsumer.Spec.Provider.Namespace = provider.Namespace
+			}
 		}
 
-		if err := createDatabaseIfNotExist(*provider, consumer); err != nil {
-			return ctrl.Result{}, err
-		}
-
-		// once we have a provider, update our crd
-		if mariaDBConsumer.Spec.Hostname == "" {
-			mariaDBConsumer.Spec.Hostname = provider.Hostname
-		}
-		if mariaDBConsumer.Spec.Port == "" {
-			mariaDBConsumer.Spec.Port = provider.Port
-		}
-		if mariaDBConsumer.Spec.ReadReplicaHostname == "" {
-			mariaDBConsumer.Spec.ReadReplicaHostname = provider.ReadReplicaHostname
-		}
-
-		// check if service exists, get if it does
+		// check if service exists, get if it does, create otherwise
 		service := &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      mariaDBConsumer.Spec.ServiceHostname,
+				Name:      mariaDBConsumer.Spec.Consumer.Services.Primary,
 				Labels:    labels,
 				Namespace: mariaDBConsumer.ObjectMeta.Namespace,
 			},
 			Spec: corev1.ServiceSpec{
-				ExternalName: mariaDBConsumer.Spec.Hostname,
+				ExternalName: mariaDBConsumer.Spec.Provider.Hostname,
 				Type:         corev1.ServiceTypeExternalName,
 			},
 		}
 		err := r.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: service.ObjectMeta.Name}, service)
 		if err != nil {
+			opLog.Info(fmt.Sprintf("Creating service %s in namespace %s", mariaDBConsumer.Spec.Consumer.Services.Primary, mariaDBConsumer.ObjectMeta.Namespace))
 			if err := r.Create(context.Background(), service); err != nil {
 				return ctrl.Result{}, err
 			}
@@ -189,39 +209,48 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		if err := r.Update(context.Background(), service); err != nil {
 			return ctrl.Result{}, err
 		}
-		// check if service exists, get if it does
-		serviceRR := &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      mariaDBConsumer.Spec.ServiceReadReplicaHostname,
-				Labels:    labels,
-				Namespace: mariaDBConsumer.ObjectMeta.Namespace,
-			},
-			Spec: corev1.ServiceSpec{
-				ExternalName: mariaDBConsumer.Spec.ReadReplicaHostname,
-				Type:         corev1.ServiceTypeExternalName,
-			},
-		}
-		err = r.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: serviceRR.ObjectMeta.Name}, serviceRR)
-		if err != nil {
-			if err := r.Create(context.Background(), serviceRR); err != nil {
-				return ctrl.Result{}, err
+		// check if read replica service exists, get if it does, create otherwise
+		if len(mariaDBConsumer.Spec.Consumer.Services.Replicas) == 0 {
+			for _, replica := range mariaDBConsumer.Spec.Provider.ReadReplicaHostnames {
+				replicaName := req.Name + "-readreplica-" + uuid.New().String()
+				mariaDBConsumer.Spec.Consumer.Services.Replicas = append(mariaDBConsumer.Spec.Consumer.Services.Replicas, replicaName)
+				serviceRR := &corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      replicaName,
+						Labels:    labels,
+						Namespace: mariaDBConsumer.ObjectMeta.Namespace,
+					},
+					Spec: corev1.ServiceSpec{
+						ExternalName: replica,
+						Type:         corev1.ServiceTypeExternalName,
+					},
+				}
+				err = r.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: serviceRR.ObjectMeta.Name}, serviceRR)
+				if err != nil {
+					opLog.Info(fmt.Sprintf("Creating service %s in namespace %s", replicaName, mariaDBConsumer.ObjectMeta.Namespace))
+					if err := r.Create(context.Background(), serviceRR); err != nil {
+						return ctrl.Result{}, err
+					}
+				}
+				if err := r.Update(context.Background(), serviceRR); err != nil {
+					return ctrl.Result{}, err
+				}
 			}
 		}
-		if err := r.Update(context.Background(), serviceRR); err != nil {
-			return ctrl.Result{}, err
-		}
+		// check if the secret for this consumer exists, get if it does, create otherwise
 		namespacedName := types.NamespacedName{
 			Namespace: req.Namespace,
 			Name:      mariaDBConsumer.Spec.Secret,
 		}
+		replicas := strings.Join(mariaDBConsumer.Spec.Consumer.Services.Replicas[:], ",")
 		newVars := map[string]string{
 			"DB_TYPE":              "mariadb",
-			"DB_NAME":              mariaDBConsumer.Spec.Database,
-			"DB_HOST":              mariaDBConsumer.Spec.ServiceHostname,
-			"DB_READREPLICA_HOSTS": mariaDBConsumer.Spec.ServiceReadReplicaHostname,
-			"DB_PORT":              mariaDBConsumer.Spec.Port,
-			"DB_USER":              mariaDBConsumer.Spec.Username,
-			"DB_PASSWORD":          mariaDBConsumer.Spec.Password,
+			"DB_NAME":              mariaDBConsumer.Spec.Consumer.Database,
+			"DB_HOST":              mariaDBConsumer.Spec.Consumer.Services.Primary,
+			"DB_READREPLICA_HOSTS": replicas,
+			"DB_PORT":              mariaDBConsumer.Spec.Provider.Port,
+			"DB_USER":              mariaDBConsumer.Spec.Consumer.Username,
+			"DB_PASSWORD":          mariaDBConsumer.Spec.Consumer.Password,
 		}
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
@@ -237,6 +266,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 
 		err = r.Get(context.TODO(), namespacedName, secret)
 		if err != nil {
+			opLog.Info(fmt.Sprintf("Creating secret %s in namespace %s", namespacedName.Name, mariaDBConsumer.ObjectMeta.Namespace))
 			if err := r.Create(context.Background(), secret); err != nil {
 				return ctrl.Result{}, err
 			}
@@ -244,6 +274,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		if err := r.Update(context.Background(), secret); err != nil {
 			return ctrl.Result{}, err
 		}
+
 		// The object is not being deleted, so if it does not have our finalizer,
 		// then lets add the finalizer and update the object. This is equivalent
 		// registering our finalizer.
@@ -297,18 +328,18 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 		return errors.New("Unable to determine server to deprovision from")
 	}
 	consumer := MariaDBConsumerInfo{
-		DatabaseName: mariaDBConsumer.Spec.Database,
-		Username:     mariaDBConsumer.Spec.Username,
-		Password:     mariaDBConsumer.Spec.Password,
+		DatabaseName: mariaDBConsumer.Spec.Consumer.Database,
+		Username:     mariaDBConsumer.Spec.Consumer.Username,
+		Password:     mariaDBConsumer.Spec.Consumer.Password,
 	}
-	opLog.Info(fmt.Sprintf("Dropping database %s on host %s", consumer.DatabaseName, provider.Hostname))
+	opLog.Info(fmt.Sprintf("Dropping database %s on host %s - %s/%s", consumer.DatabaseName, provider.Hostname, provider.Namespace, provider.Name))
 	if err := dropDatabase(*provider, consumer); err != nil {
 		return err
 	}
 	// Delete the primary
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      mariaDBConsumer.Spec.ServiceHostname,
+			Name:      mariaDBConsumer.Spec.Consumer.Services.Primary,
 			Namespace: mariaDBConsumer.ObjectMeta.Namespace,
 		},
 	}
@@ -316,16 +347,18 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 	if err := r.Delete(context.TODO(), service); ignoreNotFound(err) != nil {
 		return err
 	}
-	// Delete the read replica
-	serviceRR := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      mariaDBConsumer.Spec.ServiceReadReplicaHostname,
-			Namespace: mariaDBConsumer.ObjectMeta.Namespace,
-		},
-	}
-	opLog.Info(fmt.Sprintf("Deleting service %s in namespace %s", serviceRR.ObjectMeta.Name, serviceRR.ObjectMeta.Namespace))
-	if err := r.Delete(context.TODO(), serviceRR); ignoreNotFound(err) != nil {
-		return err
+	// Delete the read replicas
+	for _, replica := range mariaDBConsumer.Spec.Consumer.Services.Replicas {
+		serviceRR := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      replica,
+				Namespace: mariaDBConsumer.ObjectMeta.Namespace,
+			},
+		}
+		opLog.Info(fmt.Sprintf("Deleting service %s in namespace %s", serviceRR.ObjectMeta.Name, serviceRR.ObjectMeta.Namespace))
+		if err := r.Delete(context.TODO(), serviceRR); ignoreNotFound(err) != nil {
+			return err
+		}
 	}
 	// Delete the secret
 	secret := &corev1.Secret{
@@ -378,7 +411,7 @@ func createDatabaseIfNotExist(provider MariaDBPRoviderInfo, consumer MariaDBCons
 	if err != nil {
 		return err
 	}
-	_, err = db.Exec("CREATE USER `" + consumer.Username + "`@'%' IDENTIFIED BY '" + consumer.Password + "';")
+	_, err = db.Exec("CREATE USER IF NOT EXISTS `" + consumer.Username + "`@'%' IDENTIFIED BY '" + consumer.Password + "';")
 	if err != nil {
 		return err
 	}
@@ -441,7 +474,7 @@ func getMariaDBUsage(provider MariaDBPRoviderInfo, opLog logr.Logger) (MariaDBUs
 		if err != nil {
 			return currentUsage, err
 		}
-		opLog.Info(fmt.Sprintf("Table count on host %s has reached %v", provider.Hostname, value))
+		opLog.Info(fmt.Sprintf("Table count on host %s has reached %v - %s/%s", provider.Hostname, value, provider.Namespace, provider.Name))
 		currentUsage.TableCount = value
 	}
 
@@ -457,7 +490,7 @@ func getMariaDBUsage(provider MariaDBPRoviderInfo, opLog logr.Logger) (MariaDBUs
 		if err != nil {
 			return currentUsage, err
 		}
-		opLog.Info(fmt.Sprintf("Schema count on host %s has reached %v", provider.Hostname, value))
+		opLog.Info(fmt.Sprintf("Schema count on host %s has reached %v - %s/%s", provider.Hostname, value, provider.Namespace, provider.Name))
 		currentUsage.SchemaCount = value
 	}
 
@@ -480,15 +513,18 @@ func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *MariaDBPRovi
 	// @TODO use the name of the provider in the log statement (not just the
 	// hostname).
 	var bestHostname string
+	var nameSpaceName string
 	lowestTableCount := -1
 	for _, v := range providersList.Items {
 		if v.Spec.Environment == mariaDBConsumer.Spec.Environment {
 			// Form a temporary connection object.
 			mDBProvider := MariaDBPRoviderInfo{
-				Hostname: v.Spec.Hostname,
-				Username: v.Spec.Username,
-				Password: v.Spec.Password,
-				Port:     v.Spec.Port,
+				Hostname:  v.Spec.Hostname,
+				Username:  v.Spec.Username,
+				Password:  v.Spec.Password,
+				Port:      v.Spec.Port,
+				Name:      v.Name,
+				Namespace: v.Namespace,
 			}
 			currentUsage, err := getMariaDBUsage(mDBProvider, r.Log.WithValues("mariadbconsumer", namespaceName))
 			if err != nil {
@@ -497,12 +533,13 @@ func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *MariaDBPRovi
 
 			if lowestTableCount < 0 || currentUsage.TableCount < lowestTableCount {
 				bestHostname = v.Spec.Hostname
+				nameSpaceName = mDBProvider.Namespace + "/" + mDBProvider.Name
 				lowestTableCount = currentUsage.TableCount
 			}
 		}
 	}
 
-	opLog.Info(fmt.Sprintf("Best database hostname %s has the lowest table count %v", bestHostname, lowestTableCount))
+	opLog.Info(fmt.Sprintf("Best database hostname %s has the lowest table count %v - %s", bestHostname, lowestTableCount, nameSpaceName))
 
 	// After working out the lowest usage database, return it.
 	if bestHostname != "" {
@@ -510,10 +547,12 @@ func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *MariaDBPRovi
 			if v.Spec.Environment == mariaDBConsumer.Spec.Environment {
 				if bestHostname == v.Spec.Hostname {
 					provider.Hostname = v.Spec.Hostname
-					provider.ReadReplicaHostname = v.Spec.ReadReplicaHostname
+					provider.ReadReplicaHostnames = v.Spec.ReadReplicaHostnames
 					provider.Username = v.Spec.Username
 					provider.Password = v.Spec.Password
 					provider.Port = v.Spec.Port
+					provider.Name = v.Name
+					provider.Namespace = v.Namespace
 					return nil
 				}
 			}
@@ -532,12 +571,14 @@ func (r *MariaDBConsumerReconciler) getMariaDBProvider(provider *MariaDBPRovider
 	}
 	providersList := src.(*mariadbv1.MariaDBProviderList)
 	for _, v := range providersList.Items {
-		if v.Spec.Hostname == mariaDBConsumer.Spec.Hostname && v.Spec.Port == mariaDBConsumer.Spec.Port {
+		if v.Spec.Hostname == mariaDBConsumer.Spec.Provider.Hostname && v.Spec.Port == mariaDBConsumer.Spec.Provider.Port {
 			provider.Hostname = v.Spec.Hostname
-			provider.ReadReplicaHostname = v.Spec.ReadReplicaHostname
+			provider.ReadReplicaHostnames = v.Spec.ReadReplicaHostnames
 			provider.Username = v.Spec.Username
 			provider.Password = v.Spec.Password
 			provider.Port = v.Spec.Port
+			provider.Name = v.Name
+			provider.Namespace = v.Namespace
 		}
 	}
 	return nil

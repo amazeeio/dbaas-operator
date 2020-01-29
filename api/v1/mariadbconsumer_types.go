@@ -28,16 +28,33 @@ type MariaDBConsumerSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// These are the spec options for consumers
-	Environment                string `json:"environment,omitempty"`
-	Database                   string `json:"mariadb_database,omitempty"`
-	Hostname                   string `json:"mariadb_hostname,omitempty"`
-	ReadReplicaHostname        string `json:"mariadb_readreplica_hostname,omitempty"`
-	ServiceHostname            string `json:"service_mariadb_hostname,omitempty"`
-	ServiceReadReplicaHostname string `json:"service_mariadb_readreplica_hostname,omitempty"`
-	Password                   string `json:"mariadb_password,omitempty"`
-	Port                       string `json:"mariadb_port,omitempty"`
-	Username                   string `json:"mariadb_user,omitempty"`
-	Secret                     string `json:"secret,omitempty"`
+	Environment string                  `json:"environment,omitempty"`
+	Secret      string                  `json:"secret,omitempty"`
+	Provider    MariaDBConsumerProvider `json:"provider,omitempty"`
+	Consumer    MariaDBConsumerData     `json:"consumer,omitempty"`
+}
+
+// MariaDBConsumerData defines the provider link for this consumer
+type MariaDBConsumerData struct {
+	Database string                  `json:"database,omitempty"`
+	Password string                  `json:"password,omitempty"`
+	Username string                  `json:"username,omitempty"`
+	Services MariaDBConsumerServices `json:"services,omitempty"`
+}
+
+// MariaDBConsumerServices defines the provider link for this consumer
+type MariaDBConsumerServices struct {
+	Primary  string   `json:"primary,omitempty"`
+	Replicas []string `json:"replicas,omitempty"`
+}
+
+// MariaDBConsumerProvider defines the provider link for this consumer
+type MariaDBConsumerProvider struct {
+	Name                 string   `json:"name,omitempty"`
+	Namespace            string   `json:"namespace,omitempty"`
+	Hostname             string   `json:"hostname,omitempty"`
+	ReadReplicaHostnames []string `json:"readreplicas,omitempty"`
+	Port                 string   `json:"port,omitempty"`
 }
 
 // MariaDBConsumerStatus defines the observed state of MariaDBConsumer

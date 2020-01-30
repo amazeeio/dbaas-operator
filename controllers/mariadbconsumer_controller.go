@@ -141,7 +141,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 			mariaDBConsumer.Spec.Consumer.Password = randSeq(24, false)
 		}
 		if mariaDBConsumer.Spec.Consumer.Services.Primary == "" {
-			mariaDBConsumer.Spec.Consumer.Services.Primary = req.Name + "-" + uuid.New().String()
+			mariaDBConsumer.Spec.Consumer.Services.Primary = truncateString(req.Name, 27) + "-" + uuid.New().String()
 		}
 
 		provider := &MariaDBPRoviderInfo{}
@@ -212,7 +212,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		// check if read replica service exists, get if it does, create otherwise
 		if len(mariaDBConsumer.Spec.Consumer.Services.Replicas) == 0 {
 			for _, replica := range mariaDBConsumer.Spec.Provider.ReadReplicaHostnames {
-				replicaName := req.Name + "-readreplica-" + uuid.New().String()
+				replicaName := truncateString("readreplica-"+req.Name, 27) + "-" + uuid.New().String()
 				mariaDBConsumer.Spec.Consumer.Services.Replicas = append(mariaDBConsumer.Spec.Consumer.Services.Replicas, replicaName)
 				serviceRR := &corev1.Service{
 					ObjectMeta: metav1.ObjectMeta{

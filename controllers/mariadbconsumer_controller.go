@@ -51,6 +51,7 @@ type MariaDBConsumerReconciler struct {
 	Password                   string
 	Port                       string
 	Username                   string
+	Secret                     string
 }
 
 // MariaDBPRoviderInfo .
@@ -69,11 +70,19 @@ type MariaDBConsumerInfo struct {
 	Password     string
 }
 
+// MariaDBUsage .
+type MariaDBUsage struct {
+	SchemaCount int
+	TableCount  int
+}
+
 const (
 	// LabelAppName for discovery.
-	LabelAppName = "app_name"
+	LabelAppName = "mariadb.amazee.io/service-name"
 	// LabelAppType for discovery.
-	LabelAppType = "app_type"
+	LabelAppType = "mariadb.amazee.io/type"
+	// LabelAppManaged for discovery.
+	LabelAppManaged = "mariadb.amazee.io/managed-by"
 )
 
 // +kubebuilder:rbac:groups=mariadb.amazee.io,resources=mariadbconsumers,verbs=get;list;watch;create;update;patch;delete
@@ -95,28 +104,33 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 	finalizerName := "finalizer.consumer.mariadb.amazee.io/v1"
 
 	labels := map[string]string{
-		LabelAppName: mariaDBConsumer.ObjectMeta.Name,
-		LabelAppType: "mariadb-consumer",
+		LabelAppName:    mariaDBConsumer.ObjectMeta.Name,
+		LabelAppType:    "mariadbconsumer",
+		LabelAppManaged: "dbaas-operator",
 	}
 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if mariaDBConsumer.ObjectMeta.DeletionTimestamp.IsZero() {
 		// set up the new credentials
 		if mariaDBConsumer.Spec.ServiceHostname == "" {
-			mariaDBConsumer.Spec.ServiceHostname = "mariadb-" + uuid.New().String()
+			mariaDBConsumer.Spec.ServiceHostname = req.Name + "-" + uuid.New().String()
 		}
 		if mariaDBConsumer.Spec.Database == "" {
-			mariaDBConsumer.Spec.Database = truncateString(req.NamespacedName.Namespace, 50) + "_" + randSeq(5)
+			mariaDBConsumer.Spec.Database = truncateString(req.NamespacedName.Namespace, 50) + "_" + randSeq(5, false)
 		}
 		if mariaDBConsumer.Spec.Username == "" {
-			mariaDBConsumer.Spec.Username = truncateString(req.NamespacedName.Namespace, 10) + "_" + randSeq(5)
+			mariaDBConsumer.Spec.Username = truncateString(req.NamespacedName.Namespace, 10) + "_" + randSeq(5, false)
+		}
+		if mariaDBConsumer.Spec.Secret == "" {
+			mariaDBConsumer.Spec.Secret = req.Name + "-credentials-" + randSeq(5, true)
 		}
 		if mariaDBConsumer.Spec.Password == "" {
-			mariaDBConsumer.Spec.Password = randSeq(24)
+			mariaDBConsumer.Spec.Password = randSeq(24, false)
 		}
 		if mariaDBConsumer.Spec.ServiceReadReplicaHostname == "" {
-			mariaDBConsumer.Spec.ServiceReadReplicaHostname = "mariadb-readreplica-" + uuid.New().String()
+			mariaDBConsumer.Spec.ServiceReadReplicaHostname = req.Name + "-readreplica-" + uuid.New().String()
 		}
+
 		if mariaDBConsumer.Spec.Hostname == "" || mariaDBConsumer.Spec.Port == "" || mariaDBConsumer.Spec.ReadReplicaHostname == "" {
 			opLog.Info(fmt.Sprintf("Attempting to create database %s on any usable mariadb provider", mariaDBConsumer.Spec.Database))
 		} else {
@@ -198,7 +212,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		}
 		namespacedName := types.NamespacedName{
 			Namespace: req.Namespace,
-			Name:      "mariadb-operator-credentials",
+			Name:      mariaDBConsumer.Spec.Secret,
 		}
 		newVars := map[string]string{
 			"DB_TYPE":              "mariadb",
@@ -212,6 +226,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      namespacedName.Name,
+				Labels:    labels,
 				Namespace: namespacedName.Namespace,
 			},
 			Data: map[string][]byte{},
@@ -315,7 +330,7 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 	// Delete the secret
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "mariadb-operator-credentials",
+			Name:      mariaDBConsumer.Spec.Secret,
 			Namespace: mariaDBConsumer.ObjectMeta.Namespace,
 		},
 	}
@@ -337,12 +352,17 @@ func truncateString(str string, num int) string {
 	return bnoden
 }
 
-var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
+var alphaNumeric = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
+var dnsCompliantAlphaNumeric = []rune("abcdefghijklmnopqrstuvwxyz1234567890")
 
-func randSeq(n int) string {
+func randSeq(n int, dns bool) string {
 	b := make([]rune, n)
 	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
+		if dns {
+			b[i] = dnsCompliantAlphaNumeric[rand.Intn(len(dnsCompliantAlphaNumeric))]
+		} else {
+			b[i] = alphaNumeric[rand.Intn(len(alphaNumeric))]
+		}
 	}
 	return string(b)
 }
@@ -397,87 +417,110 @@ func dropDatabase(provider MariaDBPRoviderInfo, consumer MariaDBConsumerInfo) er
 }
 
 // check the usage of the mariadb provider and return true/false if we can use it
-func checkMariaDBUsage(provider MariaDBPRoviderInfo, opLog logr.Logger) (bool, error) {
-	opLog.Info(fmt.Sprintf("Checking usage of database server is not currently configured, proceeding to use %s", provider.Hostname))
-	// @TODO: once the logic around determining which database to use if more than one of a specific type is defined in a MariaDBProvider kind
-	// @TODO: the commented code in this block can be re-evaluated
+func getMariaDBUsage(provider MariaDBPRoviderInfo, opLog logr.Logger) (MariaDBUsage, error) {
+	currentUsage := MariaDBUsage{
+		SchemaCount: 0,
+		TableCount:  0,
+	}
 
-	/*
-		// db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
-		// if err != nil {
-		// 	return false, err
-		// }
-		// defer db.Close()
-	*/
+	db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
+	if err != nil {
+		return currentUsage, err
+	}
+	defer db.Close()
 
-	// result, err := db.Query("show status like 'Qcache_queries_in_cache';")
-	// result, err := db.Query("show status like 'Uptime_since_flush_status';")
-	// if err != nil {
-	// 	return false, err
-	// }
-	// for result.Next() {
-	// 	var name, value string
-	// 	err = result.Scan(&name, &value)
-	// 	if err != nil {
-	// 		return false, err
-	// 	}
-	// 	fmt.Println(name, value)
-	// 	if value > "9000" {
-	// 		return false, nil
-	// 	}
-	// }
+	result, err := db.Query(`SELECT COUNT(1) AS TableCount
+                            FROM information_schema.tables
+                            WHERE table_schema NOT IN ('information_schema','mysql', 'sys');`)
+	if err != nil {
+		return currentUsage, err
+	}
+	for result.Next() {
+		var value int
+		err = result.Scan(&value)
+		if err != nil {
+			return currentUsage, err
+		}
+		opLog.Info(fmt.Sprintf("Table count on host %s has reached %v", provider.Hostname, value))
+		currentUsage.TableCount = value
+	}
 
-	/*
-		// result, err := db.Query("SELECT COUNT(*) FROM information_schema.SCHEMATA")
-		// if err != nil {
-		// 	return false, err
-		// }
-		// for result.Next() {
-		// 	var value int
-		// 	err = result.Scan(&value)
-		// 	if err != nil {
-		// 		return false, err
-		// 	}
-		// 	opLog.Info("Database count on host %s has reached %v", provider.Hostname, value)
-		// 	if value > 50 {
-		// 		return false, nil
-		// 	}
-		// }
-	*/
-	return true, nil
+	result, err = db.Query(`SELECT COUNT(*) AS SchemaCount
+	                        FROM information_schema.SCHEMATA
+	                        WHERE schema_name NOT IN ('information_schema','mysql', 'sys');`)
+	if err != nil {
+		return currentUsage, err
+	}
+	for result.Next() {
+		var value int
+		err = result.Scan(&value)
+		if err != nil {
+			return currentUsage, err
+		}
+		opLog.Info(fmt.Sprintf("Schema count on host %s has reached %v", provider.Hostname, value))
+		currentUsage.SchemaCount = value
+	}
+
+	return currentUsage, nil
 }
 
-// grab all the MariaDBProvider kinds and check each one
+// Grab all the MariaDBProvider kinds and check each one
 func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *MariaDBPRoviderInfo, mariaDBConsumer *mariadbv1.MariaDBConsumer, namespaceName types.NamespacedName) error {
+	opLog := r.Log.WithValues("mariadbconsumer", namespaceName)
 	providers := &mariadbv1.MariaDBProviderList{}
 	src := providers.DeepCopyObject()
 	if err := r.List(context.TODO(), src.(*mariadbv1.MariaDBProviderList)); err != nil {
 		return err
 	}
 	providersList := src.(*mariadbv1.MariaDBProviderList)
+
+	// We need to loop around all available providers to check their current
+	// usage.
+	// @TODO make this more complex and use more usage data in the calculation.
+	// @TODO use the name of the provider in the log statement (not just the
+	// hostname).
+	var bestHostname string
+	lowestTableCount := -1
 	for _, v := range providersList.Items {
 		if v.Spec.Environment == mariaDBConsumer.Spec.Environment {
+			// Form a temporary connection object.
 			mDBProvider := MariaDBPRoviderInfo{
 				Hostname: v.Spec.Hostname,
 				Username: v.Spec.Username,
 				Password: v.Spec.Password,
 				Port:     v.Spec.Port,
 			}
-			useMe, err := checkMariaDBUsage(mDBProvider, r.Log.WithValues("mariadbconsumer", namespaceName))
+			currentUsage, err := getMariaDBUsage(mDBProvider, r.Log.WithValues("mariadbconsumer", namespaceName))
 			if err != nil {
 				return err
 			}
-			if useMe {
-				provider.Hostname = v.Spec.Hostname
-				provider.ReadReplicaHostname = v.Spec.ReadReplicaHostname
-				provider.Username = v.Spec.Username
-				provider.Password = v.Spec.Password
-				provider.Port = v.Spec.Port
-				return nil
+
+			if lowestTableCount < 0 || currentUsage.TableCount < lowestTableCount {
+				bestHostname = v.Spec.Hostname
+				lowestTableCount = currentUsage.TableCount
 			}
 		}
 	}
-	return errors.New("no suitable usable database servers")
+
+	opLog.Info(fmt.Sprintf("Best database hostname %s has the lowest table count %v", bestHostname, lowestTableCount))
+
+	// After working out the lowest usage database, return it.
+	if bestHostname != "" {
+		for _, v := range providersList.Items {
+			if v.Spec.Environment == mariaDBConsumer.Spec.Environment {
+				if bestHostname == v.Spec.Hostname {
+					provider.Hostname = v.Spec.Hostname
+					provider.ReadReplicaHostname = v.Spec.ReadReplicaHostname
+					provider.Username = v.Spec.Username
+					provider.Password = v.Spec.Password
+					provider.Port = v.Spec.Port
+					return nil
+				}
+			}
+		}
+	}
+
+	return errors.New("No suitable usable database servers")
 }
 
 // get info for just one of the providers

@@ -37,6 +37,7 @@ type MariaDBConsumerSpec struct {
 	Password                   string `json:"mariadb_password,omitempty"`
 	Port                       string `json:"mariadb_port,omitempty"`
 	Username                   string `json:"mariadb_user,omitempty"`
+	Secret                     string `json:"secret,omitempty"`
 }
 
 // MariaDBConsumerStatus defines the observed state of MariaDBConsumer

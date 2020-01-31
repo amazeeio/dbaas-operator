@@ -23,6 +23,12 @@ export PATH=$PATH:/usr/local/kubebuilder/bin
 
 ## Test It Out
 This will spin up a local mysql provider, and then start kind and installs the operator and runs some basic tests to confirm the operation of the operator
+
+Using circleci locally
+```
+circleci build -v $(pwd):/workdir
+```
+
 ```
 make operator-test
 

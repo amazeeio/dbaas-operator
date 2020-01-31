@@ -87,6 +87,7 @@ fi
 echo "==> Delete the consumer"
 kubectl delete -f test-resources/consumer.yaml
 echo "==> Check if the operator deletes the database"
+DB_EXISTS=$(docker-compose exec -T mysql mysql --host=local-dbaas-provider --port=3306 -uroot -qfsBNe "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '${DB_NAME}';")
 if [[ ! -z "${DB_EXISTS}" ]]
 then 
   echo "database ${DB_EXISTS} exists"
@@ -129,6 +130,7 @@ fi
 echo "==> Delete the consumer"
 kubectl delete -f test-resources/consumer-test.yaml
 echo "==> Check if the operator deletes the database"
+DB_EXISTS=$(docker-compose exec -T mysql mysql --host=local-dbaas-provider --port=3306 -uroot -qfsBNe "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '${DB_NAME}';")
 if [[ ! -z "${DB_EXISTS}" ]]
 then 
   echo "database ${DB_EXISTS} exists"
@@ -171,6 +173,7 @@ fi
 echo "==> Delete the consumer"
 kubectl delete -f test-resources/consumer-test-2.yaml
 echo "==> Check if the operator deletes the database"
+DB_EXISTS=$(docker-compose exec -T mysql mysql --host=local-dbaas-provider --port=3306 -uroot -qfsBNe "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '${DB_NAME}';")
 if [[ ! -z "${DB_EXISTS}" ]]
 then 
   echo "database ${DB_EXISTS} exists"

@@ -21,7 +21,7 @@ jobs:
           name: Install Go
           command: |
             curl -sLo /tmp/go1.13.7.linux-amd64.tar.gz https://dl.google.com/go/go1.13.7.linux-amd64.tar.gz
-            sudo tar -C /usr/local -xzf /tmp/go1.13.7.linux-amd64.tar.gz
+            sudo tar -C /usr/local/go1137 -xzf /tmp/go1.13.7.linux-amd64.tar.gz
       - run:
           name: Install Kustomize
           command: |
@@ -42,7 +42,7 @@ jobs:
           name: Run Tests
           command: |
             export PATH=$PATH:/usr/local/kubebuilder/bin
-            export PATH=$PATH:/usr/local/go/bin
+            export PATH=$PATH:/usr/local/go1137/go/bin
             export GOPATH=$HOME/go
             export GO111MODULE=on
             make operator-test

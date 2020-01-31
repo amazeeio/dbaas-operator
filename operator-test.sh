@@ -9,22 +9,22 @@ KIND_VER=v1.17.0
 #KIND_VER=$(curl -s https://hub.docker.com/v2/repositories/kindest/node/tags | jq -r '.results | .[].name' | grep 'v1.17' | sort -Vr | head -1)
 KIND_NAME=dbaas-operator-test
 OPERATOR_IMAGE=controller:unique
-TIMEOUT=180
+CHECK_TIMEOUT=60
 
 echo "================ BEGIN ================"
 echo "==> Bring up local provider"
 docker-compose up -d
 
-COUNTER=1
+CHECK_COUNTER=1
 echo "==> Ensure database provider is running"
 until $(docker-compose exec -T mysql mysql --host=local-dbaas-provider --port=3306 -uroot -e 'show databases;' | grep -q "information_schema")
 do
-if [ $COUNTER -lt $TIMEOUT ]; then
-  let COUNTER=SERVICE_BROKER_COUNTER+1
+if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
+  let CHECK_COUNTER=CHECK_COUNTER+1
   echo "Database provider not running yet"
   sleep 5
 else
-  echo "Timeout of $TIMEOUT for database provider startup reached"
+  echo "Timeout of $CHECK_TIMEOUT for database provider startup reached"
   exit 1
 fi
 done
@@ -40,16 +40,16 @@ make docker-build IMG=${OPERATOR_IMAGE}
 kind load docker-image ${OPERATOR_IMAGE} --name ${KIND_NAME}
 make deploy IMG=${OPERATOR_IMAGE}
 
-COUNTER=1
+CHECK_COUNTER=1
 echo "==> Ensure operator is running"
 until $(kubectl get pods  -n dbaas-operator-system --no-headers | grep -q "Running")
 do
-if [ $COUNTER -lt $TIMEOUT ]; then
-  let COUNTER=SERVICE_BROKER_COUNTER+1
+if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
+  let CHECK_COUNTER=CHECK_COUNTER+1
   echo "Operator not running yet"
   sleep 5
 else
-  echo "Timeout of $TIMEOUT for operator startup reached"
+  echo "Timeout of $CHECK_TIMEOUT for operator startup reached"
   exit 1
 fi
 done
@@ -59,15 +59,15 @@ echo "==> Add a provider"
 echo "==> Add a blank consumer"
 kubectl apply -f test-resources/consumer.yaml
 
-COUNTER=1
+CHECK_COUNTER=1
 until kubectl get secret $(kubectl get mariadbconsumer/mariadbconsumer-testing -o json | jq -r '.spec.secret')
 do
-if [ $COUNTER -lt $TIMEOUT ]; then
-  let COUNTER=SERVICE_BROKER_COUNTER+1
+if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
+  let CHECK_COUNTER=CHECK_COUNTER+1
   echo "Secret not created yet"
   sleep 5
 else
-  echo "Timeout of $TIMEOUT for operator startup reached"
+  echo "Timeout of $CHECK_TIMEOUT for operator startup reached"
   exit 1
 fi
 done
@@ -102,15 +102,15 @@ docker-compose exec -T mysql mysql --host=local-dbaas-provider --port=3306 -uroo
 
 echo "====> Add a seeded consumer"
 kubectl apply -f test-resources/consumer-test.yaml
-COUNTER=1
+CHECK_COUNTER=1
 until kubectl get secret $(kubectl get mariadbconsumer/mariadbconsumer-testing-2 -o json | jq -r '.spec.secret')
 do
-if [ $COUNTER -lt $TIMEOUT ]; then
+if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
   let COUNTER=SERVICE_BROKER_COUNTER+1
   echo "Secret not created yet"
   sleep 5
 else
-  echo "Timeout of $TIMEOUT for operator startup reached"
+  echo "Timeout of $CHECK_TIMEOUT for operator startup reached"
   exit 1
 fi
 done
@@ -145,15 +145,15 @@ docker-compose exec -T mysql mysql --host=local-dbaas-provider --port=3306 -uroo
 
 echo "====> Add a seeded consumer"
 kubectl apply -f test-resources/consumer-test-2.yaml
-COUNTER=1
+CHECK_COUNTER=1
 until kubectl get secret $(kubectl get mariadbconsumer/mariadbconsumer-testing-3 -o json | jq -r '.spec.secret')
 do
-if [ $COUNTER -lt $TIMEOUT ]; then
-  let COUNTER=SERVICE_BROKER_COUNTER+1
+if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
+  let CHECK_COUNTER=CHECK_COUNTER+1
   echo "Secret not created yet"
   sleep 5
 else
-  echo "Timeout of $TIMEOUT for operator startup reached"
+  echo "Timeout of $CHECK_TIMEOUT for operator startup reached"
   exit 1
 fi
 done

@@ -43,5 +43,4 @@ jobs:
           command: |
             export PATH=$PATH:/usr/local/kubebuilder/bin
             export PATH=$PATH:/usr/local/go/bin
-            GO111MODULE=on go install sigs.k8s.io/kustomize/kustomize/v3
             make operator-test

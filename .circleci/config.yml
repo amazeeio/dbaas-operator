@@ -1,8 +1,8 @@
 version: 2
 jobs:
   build:
-    machine:
-      image: ubuntu-1604:201903-01
+    machine: true
+      # image: ubuntu-1604:201903-01
     working_directory: ~/project
     steps:
       - run:
@@ -17,7 +17,6 @@ jobs:
                 exit 1
               fi
             fi
-            go version
       - checkout
       - run:
           name: Install Go
@@ -25,7 +24,6 @@ jobs:
             sudo rm -rf /usr/local/go
             curl -sLo /tmp/go1.13.7.linux-amd64.tar.gz https://dl.google.com/go/go1.13.7.linux-amd64.tar.gz
             sudo tar -C /usr/local -xzf /tmp/go1.13.7.linux-amd64.tar.gz
-            go version
       - run:
           name: Install Kustomize
           command: |

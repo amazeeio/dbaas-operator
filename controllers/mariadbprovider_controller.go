@@ -30,14 +30,14 @@ import (
 // MariaDBProviderReconciler reconciles a MariaDBProvider object
 type MariaDBProviderReconciler struct {
 	client.Client
-	Log                 logr.Logger
-	Scheme              *runtime.Scheme
-	Environment         string
-	Hostname            string
-	ReadReplicaHostname string
-	Password            string
-	Port                string
-	Username            string
+	Log                  logr.Logger
+	Scheme               *runtime.Scheme
+	Environment          string
+	Hostname             string
+	ReadReplicaHostnames []string
+	Password             string
+	Port                 string
+	Username             string
 }
 
 // +kubebuilder:rbac:groups=mariadb.amazee.io,resources=mariadbproviders,verbs=get;list;watch;create;update;patch;delete

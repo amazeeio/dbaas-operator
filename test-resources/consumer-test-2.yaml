@@ -1,0 +1,15 @@
+apiVersion: mariadb.amazee.io/v1
+kind: MariaDBConsumer
+metadata:
+  name: mariadbconsumer-testing-3
+spec:
+  environment: test
+  consumer:
+    database: testdb1
+    password: testdb1
+    username: testdb1
+  provider:
+    hostname: 172.17.0.1.xip.io
+    port: "33066"
+    readreplicas:
+    - 172.17.0.1.xip.io

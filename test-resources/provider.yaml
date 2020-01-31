@@ -1,0 +1,12 @@
+apiVersion: mariadb.amazee.io/v1
+kind: MariaDBProvider
+metadata:
+  name: mariadbprovider-testing
+spec:
+  environment: test
+  hostname: 172.17.0.1.xip.io
+  readreplica_hostnames:
+  - 172.17.0.1.xip.io
+  password: password
+  port: '33066'
+  user: root

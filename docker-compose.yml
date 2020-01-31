@@ -1,0 +1,26 @@
+version: '3.2'
+services:
+  local-dbaas-provider:
+    image: mariadb:10.4.12
+    restart: always
+    environment:
+      MYSQL_DATABASE: 'db'
+      MYSQL_USER: 'user'
+      MYSQL_PASSWORD: 'password'
+      MYSQL_ROOT_PASSWORD: 'password'
+    ports:
+      - '33066:3306'
+  mysql:
+    image: amazeeio/alpine-mysql-client
+    environment:
+      MYSQL_PWD: 'password'
+    stdin_open: true
+  # local-registry:
+  #   image: registry:2
+  #   ports:
+  #     - '5005:5000'
+  #   labels:
+  #     lagoon.type: none
+  # local-operator:
+  #   image: controller:latest
+  #   restart: always

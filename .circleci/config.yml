@@ -16,35 +16,34 @@ jobs:
                 exit 1
               fi
             fi
-            go version
-      # - checkout
-      # - run:
-      #     name: Install Go
-      #     command: |
-      #       mkdir -p /usr/local/go1137
-      #       curl -sLo /tmp/go1.13.7.linux-amd64.tar.gz https://dl.google.com/go/go1.13.7.linux-amd64.tar.gz
-      #       sudo tar -C /usr/local/go1137 -xzf /tmp/go1.13.7.linux-amd64.tar.gz
-      # - run:
-      #     name: Install Kustomize
-      #     command: |
-      #       curl -sLo /tmp/kustomize_v3.5.4_linux_amd64.tar.gz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv3.5.4/kustomize_v3.5.4_linux_amd64.tar.gz
-      #       sudo tar -C /usr/local/bin -xzf /tmp/kustomize_v3.5.4_linux_amd64.tar.gz
-      # - run:
-      #     name: Install KinD
-      #     command: |
-      #       curl -sLo /tmp/kind https://github.com/kubernetes-sigs/kind/releases/download/v0.7.0/kind-linux-amd64
-      #       chmod +x /tmp/kind
-      #       sudo mv /tmp/kind /usr/local/bin/
-      # - run:
-      #     name: Install kubebuilder
-      #     command: |
-      #       curl -sL https://go.kubebuilder.io/dl/2.2.0/linux/amd64 | tar -xz -C /tmp/
-      #       sudo mv /tmp/kubebuilder_2.2.0_linux_amd64 /usr/local/kubebuilder
-      # - run:
-      #     name: Run Tests
-      #     command: |
-      #       export PATH=$PATH:/usr/local/kubebuilder/bin
-      #       export PATH=$PATH:/usr/local/go1137/go/bin
-      #       export GOPATH=$HOME/go
-      #       export GO111MODULE=on
-      #       make operator-test
+      - checkout
+      - run:
+          name: Install Go
+          command: |
+            sudo mkdir -p /usr/local/go1137
+            curl -sLo /tmp/go1.13.7.linux-amd64.tar.gz https://dl.google.com/go/go1.13.7.linux-amd64.tar.gz
+            sudo tar -C /usr/local/go1137 -xzf /tmp/go1.13.7.linux-amd64.tar.gz
+      - run:
+          name: Install Kustomize
+          command: |
+            curl -sLo /tmp/kustomize_v3.5.4_linux_amd64.tar.gz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv3.5.4/kustomize_v3.5.4_linux_amd64.tar.gz
+            sudo tar -C /usr/local/bin -xzf /tmp/kustomize_v3.5.4_linux_amd64.tar.gz
+      - run:
+          name: Install KinD
+          command: |
+            curl -sLo /tmp/kind https://github.com/kubernetes-sigs/kind/releases/download/v0.7.0/kind-linux-amd64
+            chmod +x /tmp/kind
+            sudo mv /tmp/kind /usr/local/bin/
+      - run:
+          name: Install kubebuilder
+          command: |
+            curl -sL https://go.kubebuilder.io/dl/2.2.0/linux/amd64 | tar -xz -C /tmp/
+            sudo mv /tmp/kubebuilder_2.2.0_linux_amd64 /usr/local/kubebuilder
+      - run:
+          name: Run Tests
+          command: |
+            export PATH=$PATH:/usr/local/kubebuilder/bin
+            export PATH=$PATH:/usr/local/go1137/go/bin
+            export GOPATH=$HOME/go
+            export GO111MODULE=on
+            make operator-test

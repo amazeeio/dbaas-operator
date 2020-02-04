@@ -8,7 +8,7 @@ KIND_VER=v1.17.0
 # or get the latest tagged version of a specific k8s version of kind
 #KIND_VER=$(curl -s https://hub.docker.com/v2/repositories/kindest/node/tags | jq -r '.results | .[].name' | grep 'v1.17' | sort -Vr | head -1)
 KIND_NAME=dbaas-operator-test
-OPERATOR_IMAGE=controller:unique
+OPERATOR_IMAGE=amazeeio/dbaas-operator:test-tag
 CHECK_TIMEOUT=60
 
 echo "================ BEGIN ================"

@@ -29,7 +29,6 @@ type MariaDBConsumerSpec struct {
 
 	// These are the spec options for consumers
 	Environment string                  `json:"environment,omitempty"`
-	Secret      string                  `json:"secret,omitempty"`
 	Provider    MariaDBConsumerProvider `json:"provider,omitempty"`
 	Consumer    MariaDBConsumerData     `json:"consumer,omitempty"`
 }

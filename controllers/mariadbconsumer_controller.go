@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
@@ -52,7 +51,6 @@ type MariaDBConsumerReconciler struct {
 	Password                   string
 	Port                       string
 	Username                   string
-	Secret                     string
 	Provider                   struct {
 		Name      string
 		Namespace string
@@ -105,7 +103,6 @@ const (
 // +kubebuilder:rbac:groups=mariadb.amazee.io,resources=mariadbproviders,verbs=get;list;watch
 // +kubebuilder:rbac:groups=mariadb.amazee.io,resources=mariadbconsumers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=services,verbs=list;get;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=list;get;watch;create;update;patch;delete
 
 // Reconcile .
 func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
@@ -128,9 +125,6 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 	// examine DeletionTimestamp to determine if object is under deletion
 	if mariaDBConsumer.ObjectMeta.DeletionTimestamp.IsZero() {
 		// set up the new credentials
-		if mariaDBConsumer.Spec.Secret == "" {
-			mariaDBConsumer.Spec.Secret = req.Name + "-credentials-" + randSeq(5, true)
-		}
 		if mariaDBConsumer.Spec.Consumer.Database == "" {
 			mariaDBConsumer.Spec.Consumer.Database = truncateString(req.NamespacedName.Namespace, 50) + "_" + randSeq(5, false)
 		}
@@ -237,43 +231,6 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 				}
 			}
 		}
-		// check if the secret for this consumer exists, get if it does, create otherwise
-		namespacedName := types.NamespacedName{
-			Namespace: req.Namespace,
-			Name:      mariaDBConsumer.Spec.Secret,
-		}
-		replicas := strings.Join(mariaDBConsumer.Spec.Consumer.Services.Replicas[:], ",")
-		newVars := map[string]string{
-			"DB_TYPE":              "mariadb",
-			"DB_NAME":              mariaDBConsumer.Spec.Consumer.Database,
-			"DB_HOST":              mariaDBConsumer.Spec.Consumer.Services.Primary,
-			"DB_READREPLICA_HOSTS": replicas,
-			"DB_PORT":              mariaDBConsumer.Spec.Provider.Port,
-			"DB_USER":              mariaDBConsumer.Spec.Consumer.Username,
-			"DB_PASSWORD":          mariaDBConsumer.Spec.Consumer.Password,
-		}
-		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      namespacedName.Name,
-				Labels:    labels,
-				Namespace: namespacedName.Namespace,
-			},
-			Data: map[string][]byte{},
-		}
-		for mapKey, newVar := range newVars {
-			secret.Data[mapKey] = []byte(newVar)
-		}
-
-		err = r.Get(context.TODO(), namespacedName, secret)
-		if err != nil {
-			opLog.Info(fmt.Sprintf("Creating secret %s in namespace %s", namespacedName.Name, mariaDBConsumer.ObjectMeta.Namespace))
-			if err := r.Create(context.Background(), secret); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-		if err := r.Update(context.Background(), secret); err != nil {
-			return ctrl.Result{}, err
-		}
 
 		// The object is not being deleted, so if it does not have our finalizer,
 		// then lets add the finalizer and update the object. This is equivalent
@@ -359,17 +316,6 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 		if err := r.Delete(context.TODO(), serviceRR); ignoreNotFound(err) != nil {
 			return err
 		}
-	}
-	// Delete the secret
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      mariaDBConsumer.Spec.Secret,
-			Namespace: mariaDBConsumer.ObjectMeta.Namespace,
-		},
-	}
-	opLog.Info(fmt.Sprintf("Deleting secret %s in namespace %s", secret.ObjectMeta.Name, secret.ObjectMeta.Namespace))
-	if err := r.Delete(context.TODO(), secret); ignoreNotFound(err) != nil {
-		return err
 	}
 	return nil
 }

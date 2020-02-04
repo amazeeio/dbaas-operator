@@ -76,8 +76,6 @@ spec:
                     type: string
                   type: array
               type: object
-            secret:
-              type: string
           type: object
         status:
           description: MariaDBConsumerStatus defines the observed state of MariaDBConsumer

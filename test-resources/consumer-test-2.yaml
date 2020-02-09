@@ -11,5 +11,5 @@ spec:
   provider:
     hostname: 172.17.0.1.xip.io
     port: "33066"
-    readreplicas:
+    readReplicas:
     - 172.17.0.1.xip.io

@@ -52,7 +52,7 @@ type MariaDBConsumerProvider struct {
 	Name                 string   `json:"name,omitempty"`
 	Namespace            string   `json:"namespace,omitempty"`
 	Hostname             string   `json:"hostname,omitempty"`
-	ReadReplicaHostnames []string `json:"readreplicas,omitempty"`
+	ReadReplicaHostnames []string `json:"readReplicas,omitempty"`
 	Port                 string   `json:"port,omitempty"`
 }
 

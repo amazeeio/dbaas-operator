@@ -43,7 +43,7 @@ spec:
               type: string
             port:
               type: string
-            readreplica_hostnames:
+            readReplicaHostnames:
               items:
                 type: string
               type: array

@@ -30,7 +30,7 @@ type MariaDBProviderSpec struct {
 	// These are the spec options for providers
 	Environment          string   `json:"environment,omitempty"`
 	Hostname             string   `json:"hostname,omitempty"`
-	ReadReplicaHostnames []string `json:"readreplica_hostnames,omitempty"`
+	ReadReplicaHostnames []string `json:"readReplicaHostnames,omitempty"`
 	Password             string   `json:"password,omitempty"`
 	Port                 string   `json:"port,omitempty"`
 	Username             string   `json:"user,omitempty"`

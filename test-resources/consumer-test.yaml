@@ -13,5 +13,5 @@ spec:
     name: mariadbprovider-testing
     namespace: default
     port: "33066"
-    readreplicas:
+    readReplicas:
     - 172.17.0.1.xip.io

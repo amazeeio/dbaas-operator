@@ -71,7 +71,7 @@ spec:
                   type: string
                 port:
                   type: string
-                readreplicas:
+                readReplicas:
                   items:
                     type: string
                   type: array

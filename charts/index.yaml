@@ -3,7 +3,7 @@ entries:
   dbaas-operator:
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2020-02-09T18:09:45.593125-06:00"
+    created: "2020-02-09T18:36:35.38512-06:00"
     description: A Helm chart for dbaas-operator
     digest: 49e3bac9fd6a6eea448accd9483d9fbacd3a3b0b3e2e146c7304b558438c0df2
     name: dbaas-operator
@@ -14,12 +14,12 @@ entries:
   mariadbprovider:
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2020-02-09T18:09:45.593651-06:00"
+    created: "2020-02-09T18:36:35.385364-06:00"
     description: A Helm chart for MariaDBProvider used by dbaas-operator
-    digest: 2bd3860d95068cfe30da36d9d674d5baddffea2c8ef1a3ea0eae41b0cc9c37ea
+    digest: bc03d2aa3c0d0aba80063294dbf467cb79b32a408cb34dec1841b531ebd2094c
     name: mariadbprovider
     type: application
     urls:
-    - mariadbprovider-0.1.0.tgz
-    version: 0.1.0
-generated: "2020-02-09T18:09:45.589345-06:00"
+    - mariadbprovider-0.1.1.tgz
+    version: 0.1.1
+generated: "2020-02-09T18:36:35.384027-06:00"

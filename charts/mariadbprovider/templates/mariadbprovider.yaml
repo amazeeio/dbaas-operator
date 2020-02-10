@@ -5,11 +5,11 @@ kind: MariaDBProvider
 metadata:
   name: {{ $providerName }}
 spec:
-  environment: {{ $providerConfig.environment }}
-  hostname:  {{ $providerConfig.hostname }}
+  environment: {{ $providerConfig.environment | quote }}
+  hostname:  {{ $providerConfig.hostname | quote }}
   readReplicaHostnames:
     {{- toYaml $providerConfig.readReplicaHostnames | nindent 4 }}
-  password: {{ $providerConfig.password }}
+  password: {{ $providerConfig.password | quote }}
   port: {{ $providerConfig.port | quote }}
-  user: {{ $providerConfig.user }}
+  user: {{ $providerConfig.user | quote }}
 {{- end }}

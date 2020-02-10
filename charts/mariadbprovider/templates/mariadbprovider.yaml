@@ -1,0 +1,15 @@
+{{- range $providerName, $providerConfig := .Values.providers }}
+---
+apiVersion: mariadb.amazee.io/v1
+kind: MariaDBProvider
+metadata:
+  name: {{ $providerName }}
+spec:
+  environment: {{ $providerConfig.environment }}
+  hostname:  {{ $providerConfig.hostname }}
+  readReplicaHostnames:
+    {{- toYaml $providerConfig.readReplicaHostnames | nindent 4 }}
+  password: {{ $providerConfig.password }}
+  port: {{ $providerConfig.port | quote }}
+  user: {{ $providerConfig.user }}
+{{- end }}

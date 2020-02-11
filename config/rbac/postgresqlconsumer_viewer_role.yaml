@@ -1,0 +1,20 @@
+# permissions to do viewer postgresqlconsumers.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: postgresqlconsumer-viewer-role
+rules:
+- apiGroups:
+  - postgres.amazee.io
+  resources:
+  - postgresqlconsumers
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - postgres.amazee.io
+  resources:
+  - postgresqlconsumers/status
+  verbs:
+  - get

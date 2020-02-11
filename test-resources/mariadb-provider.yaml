@@ -4,9 +4,9 @@ metadata:
   name: mariadbprovider-testing
 spec:
   environment: test
-  hostname: 172.17.0.1.xip.io
+  hostname: mariadb.172.17.0.1.xip.io
   readReplicaHostnames:
-  - 172.17.0.1.xip.io
+  - mariadb.replica.172.17.0.1.xip.io
   password: password
   port: '33066'
   user: root

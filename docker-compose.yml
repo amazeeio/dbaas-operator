@@ -1,7 +1,9 @@
 version: '3.2'
 services:
-  local-dbaas-provider:
-    image: mariadb:10.4.12
+  local-dbaas-mariadb-provider:
+    build:
+      context: test-resources
+      dockerfile: Dockerfile.mariadb
     restart: always
     environment:
       MYSQL_DATABASE: 'db'
@@ -15,12 +17,23 @@ services:
     environment:
       MYSQL_PWD: 'password'
     stdin_open: true
-  # local-registry:
-  #   image: registry:2
-  #   ports:
-  #     - '5005:5000'
-  #   labels:
-  #     lagoon.type: none
-  # local-operator:
-  #   image: controller:latest
-  #   restart: always
+  local-dbaas-psql-provider:
+    build:
+      context: test-resources
+      dockerfile: Dockerfile.postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: 'password'
+      POSTGRES_USER: 'postgres'
+    ports:
+      - '5432:5432'
+  local-dbaas-mongo-provider:
+    build:
+      context: test-resources
+      dockerfile: Dockerfile.mongo
+    restart: always
+    ports:
+      - '27017:27017'
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: 'root'
+      MONGO_INITDB_ROOT_PASSWORD: 'password'

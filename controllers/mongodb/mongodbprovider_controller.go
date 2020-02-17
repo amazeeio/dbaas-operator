@@ -92,9 +92,9 @@ func (r *MongoDBProviderReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *MongoDBProviderReconciler) deleteExternalResources(postgresqlProvider *mongodbv1.MongoDBProvider, namespace string) error {
+func (r *MongoDBProviderReconciler) deleteExternalResources(mongodbProvider *mongodbv1.MongoDBProvider, namespace string) error {
 	//
-	// delete any external resources associated with the postgresqlProvider
+	// delete any external resources associated with the mongodbProvider
 	//
 	return nil
 }

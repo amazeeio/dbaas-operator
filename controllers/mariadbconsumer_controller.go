@@ -144,6 +144,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 			opLog.Info(fmt.Sprintf("Attempting to create database %s on any usable mariadb provider", mariaDBConsumer.Spec.Consumer.Database))
 			// check the providers we have to see who is busy
 			if err := r.checkMariaDBProviders(provider, &mariaDBConsumer, req.NamespacedName); err != nil {
+				opLog.Error(err, "Error checking the providers in the cluster")
 				return ctrl.Result{}, err
 			}
 			if provider.Hostname == "" {
@@ -158,6 +159,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 			}
 
 			if err := createDatabaseIfNotExist(*provider, consumer); err != nil {
+				opLog.Error(err, "Unable to create database")
 				return ctrl.Result{}, err
 			}
 
@@ -197,10 +199,12 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		if err != nil {
 			opLog.Info(fmt.Sprintf("Creating service %s in namespace %s", mariaDBConsumer.Spec.Consumer.Services.Primary, mariaDBConsumer.ObjectMeta.Namespace))
 			if err := r.Create(context.Background(), service); err != nil {
+				opLog.Error(err, fmt.Sprintf("Error creating service %s in namespace %s", mariaDBConsumer.Spec.Consumer.Services.Primary, mariaDBConsumer.ObjectMeta.Namespace))
 				return ctrl.Result{}, err
 			}
 		}
 		if err := r.Update(context.Background(), service); err != nil {
+			opLog.Error(err, fmt.Sprintf("Error updating service %s in namespace %s", mariaDBConsumer.Spec.Consumer.Services.Primary, mariaDBConsumer.ObjectMeta.Namespace))
 			return ctrl.Result{}, err
 		}
 		// check if read replica service exists, get if it does, create otherwise
@@ -223,10 +227,12 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 				if err != nil {
 					opLog.Info(fmt.Sprintf("Creating service %s in namespace %s", replicaName, mariaDBConsumer.ObjectMeta.Namespace))
 					if err := r.Create(context.Background(), serviceRR); err != nil {
+						opLog.Error(err, fmt.Sprintf("Error creating service %s in namespace %s", replicaName, mariaDBConsumer.ObjectMeta.Namespace))
 						return ctrl.Result{}, err
 					}
 				}
 				if err := r.Update(context.Background(), serviceRR); err != nil {
+					opLog.Error(err, fmt.Sprintf("Error updating service %s in namespace %s", replicaName, mariaDBConsumer.ObjectMeta.Namespace))
 					return ctrl.Result{}, err
 				}
 			}
@@ -238,6 +244,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		if !containsString(mariaDBConsumer.ObjectMeta.Finalizers, finalizerName) {
 			mariaDBConsumer.ObjectMeta.Finalizers = append(mariaDBConsumer.ObjectMeta.Finalizers, finalizerName)
 			if err := r.Update(context.Background(), &mariaDBConsumer); err != nil {
+				opLog.Error(err, fmt.Sprintf("Error updating consumer %s in namespace %s", mariaDBConsumer.ObjectMeta.Name, mariaDBConsumer.ObjectMeta.Namespace))
 				return ctrl.Result{}, err
 			}
 		}
@@ -278,7 +285,8 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 	// multiple types for same object.
 	// check the providers we have to see who is busy
 	provider := &MariaDBPRoviderInfo{}
-	if err := r.getMariaDBProvider(provider, mariaDBConsumer); err != nil {
+	if err := r.getMariaDBProvider(provider, mariaDBConsumer, opLog); err != nil {
+		opLog.Error(err, fmt.Sprintf("Unable to get provider %s - %s in namespace %s, something went wrong", provider.Name, provider.Hostname, provider.Namespace))
 		return err
 	}
 	if provider.Hostname == "" {
@@ -291,6 +299,7 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 	}
 	opLog.Info(fmt.Sprintf("Dropping database %s on host %s - %s/%s", consumer.DatabaseName, provider.Hostname, provider.Namespace, provider.Name))
 	if err := dropDatabase(*provider, consumer); err != nil {
+		opLog.Error(err, fmt.Sprintf("Unable to drop database %s on host %s - %s/%s", consumer.DatabaseName, provider.Hostname, provider.Namespace, provider.Name))
 		return err
 	}
 	// Delete the primary
@@ -302,6 +311,7 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 	}
 	opLog.Info(fmt.Sprintf("Deleting service %s in namespace %s", service.ObjectMeta.Name, service.ObjectMeta.Namespace))
 	if err := r.Delete(context.TODO(), service); ignoreNotFound(err) != nil {
+		opLog.Error(err, fmt.Sprintf("Unable to delete service %s in %s", service.ObjectMeta.Name, service.ObjectMeta.Namespace))
 		return err
 	}
 	// Delete the read replicas
@@ -314,6 +324,7 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 		}
 		opLog.Info(fmt.Sprintf("Deleting service %s in namespace %s", serviceRR.ObjectMeta.Name, serviceRR.ObjectMeta.Namespace))
 		if err := r.Delete(context.TODO(), serviceRR); ignoreNotFound(err) != nil {
+			opLog.Error(err, fmt.Sprintf("Unable to delete service %s in %s", serviceRR.ObjectMeta.Name, serviceRR.ObjectMeta.Namespace))
 			return err
 		}
 	}
@@ -404,36 +415,42 @@ func getMariaDBUsage(provider MariaDBPRoviderInfo, opLog logr.Logger) (MariaDBUs
 
 	db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
 	if err != nil {
+		opLog.Error(err, fmt.Sprintf("Unable to connect to %s using %s", provider.Hostname, provider.Username))
 		return currentUsage, err
 	}
 	defer db.Close()
-
-	result, err := db.Query(`SELECT COUNT(1) AS TableCount
-                            FROM information_schema.tables
-                            WHERE table_schema NOT IN ('information_schema','mysql', 'sys');`)
+	var tableCountQuery = `SELECT COUNT(1) AS TableCount
+	FROM information_schema.tables
+	WHERE table_schema NOT IN ('information_schema','mysql', 'sys');`
+	result, err := db.Query(tableCountQuery)
 	if err != nil {
+		opLog.Error(err, fmt.Sprintf("Unable to execute query %s on %s", tableCountQuery, provider.Hostname))
 		return currentUsage, err
 	}
 	for result.Next() {
 		var value int
 		err = result.Scan(&value)
 		if err != nil {
+			opLog.Error(err, fmt.Sprintf("Unable to scan results for query %s on %s", tableCountQuery, provider.Hostname))
 			return currentUsage, err
 		}
 		opLog.Info(fmt.Sprintf("Table count on host %s has reached %v - %s/%s", provider.Hostname, value, provider.Namespace, provider.Name))
 		currentUsage.TableCount = value
 	}
 
-	result, err = db.Query(`SELECT COUNT(*) AS SchemaCount
-	                        FROM information_schema.SCHEMATA
-	                        WHERE schema_name NOT IN ('information_schema','mysql', 'sys');`)
+	var schemaCountQuery = `SELECT COUNT(*) AS SchemaCount
+	FROM information_schema.SCHEMATA
+	WHERE schema_name NOT IN ('information_schema','mysql', 'sys');`
+	result, err = db.Query(schemaCountQuery)
 	if err != nil {
+		opLog.Error(err, fmt.Sprintf("Unable to execute query %s on %s", schemaCountQuery, provider.Hostname))
 		return currentUsage, err
 	}
 	for result.Next() {
 		var value int
 		err = result.Scan(&value)
 		if err != nil {
+			opLog.Error(err, fmt.Sprintf("Unable to scan results for query %s on %s", schemaCountQuery, provider.Hostname))
 			return currentUsage, err
 		}
 		opLog.Info(fmt.Sprintf("Schema count on host %s has reached %v - %s/%s", provider.Hostname, value, provider.Namespace, provider.Name))
@@ -449,6 +466,7 @@ func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *MariaDBPRovi
 	providers := &mariadbv1.MariaDBProviderList{}
 	src := providers.DeepCopyObject()
 	if err := r.List(context.TODO(), src.(*mariadbv1.MariaDBProviderList)); err != nil {
+		opLog.Error(err, "Unable to list providers in the cluster, there may be none or something went wrong")
 		return err
 	}
 	providersList := src.(*mariadbv1.MariaDBProviderList)
@@ -474,6 +492,7 @@ func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *MariaDBPRovi
 			}
 			currentUsage, err := getMariaDBUsage(mDBProvider, r.Log.WithValues("mariadbconsumer", namespaceName))
 			if err != nil {
+				opLog.Error(err, "Unable to get provider usage, something went wrong")
 				return err
 			}
 
@@ -509,10 +528,11 @@ func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *MariaDBPRovi
 }
 
 // get info for just one of the providers
-func (r *MariaDBConsumerReconciler) getMariaDBProvider(provider *MariaDBPRoviderInfo, mariaDBConsumer *mariadbv1.MariaDBConsumer) error {
+func (r *MariaDBConsumerReconciler) getMariaDBProvider(provider *MariaDBPRoviderInfo, mariaDBConsumer *mariadbv1.MariaDBConsumer, opLog logr.Logger) error {
 	providers := &mariadbv1.MariaDBProviderList{}
 	src := providers.DeepCopyObject()
 	if err := r.List(context.TODO(), src.(*mariadbv1.MariaDBProviderList)); err != nil {
+		opLog.Error(err, "Unable to list providers in the cluster, there may be none or something went wrong")
 		return err
 	}
 	providersList := src.(*mariadbv1.MariaDBProviderList)

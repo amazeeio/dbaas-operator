@@ -1,9 +1,10 @@
 apiVersion: mariadb.amazee.io/v1
 kind: MariaDBProvider
 metadata:
-  name: mariadbprovider-testing
+  name: mariadbprovider-testing-azure
 spec:
-  environment: test
+  environment: azure
+  type: azure
   hostname: 172.17.0.1.nip.io
   readReplicaHostnames:
   - 172.17.0.1.nip.io

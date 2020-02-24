@@ -9,9 +9,9 @@ spec:
     password: testdb
     username: testdb
   provider:
-    hostname: 172.17.0.1.xip.io
+    hostname: 172.17.0.1.nip.io
     name: mariadbprovider-testing
     namespace: default
     port: "33066"
     readReplicas:
-    - 172.17.0.1.xip.io
+    - 172.17.0.1.nip.io

@@ -54,6 +54,7 @@ type MariaDBConsumerProvider struct {
 	Hostname             string   `json:"hostname,omitempty"`
 	ReadReplicaHostnames []string `json:"readReplicas,omitempty"`
 	Port                 string   `json:"port,omitempty"`
+	Type                 string   `json:"type,omitempty"`
 }
 
 // MariaDBConsumerStatus defines the observed state of MariaDBConsumer

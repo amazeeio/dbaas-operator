@@ -34,6 +34,9 @@ type MariaDBProviderSpec struct {
 	Password             string   `json:"password,omitempty"`
 	Port                 string   `json:"port,omitempty"`
 	Username             string   `json:"user,omitempty"`
+	Type                 string   `json:"type,omitempty"`
+	Name                 string   `json:"name,omitempty"`
+	Namespace            string   `json:"namespace,omitempty"`
 }
 
 // MariaDBProviderStatus defines the observed state of MariaDBProvider

@@ -5,9 +5,9 @@ metadata:
 spec:
   environment: azure
   type: azure
-  hostname: 172.17.0.1.nip.io
+  hostname: azure.mariadb.172.17.0.1.nip.io
   readReplicaHostnames:
-  - 172.17.0.1.nip.io
+  - azure.mariadb.172.17.0.1.nip.io
   password: password
   port: '33066'
   user: root

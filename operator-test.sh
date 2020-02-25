@@ -120,12 +120,12 @@ add_delete_consumer () {
   kubectl get mariadbconsumer/$2 -o yaml
   DB_NAME=$(kubectl get mariadbconsumer/$2 -o json | jq -r '.spec.consumer.database')
   echo -e "${GREEN}==>${NOCOLOR} Check if the operator creates the database"
-  DB_EXISTS=$(docker-compose exec -T mysql mysql --host=local-dbaas-provider --port=3306 -uroot -qfsBNe "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '${DB_NAME}';")
+  DB_EXISTS=$(docker-compose exec -T mysql mysql --host=${3:-local-dbaas-provider} --port=3306 -uroot -qfsBNe "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '${DB_NAME}';")
   if [[ ! -z "${DB_EXISTS}" ]]
   then 
-    echo "database ${DB_EXISTS} exists"
+    echo "database ${DB_NAME} exists"
   else 
-    echo "database ${DB_EXISTS} does not exist"
+    echo "database ${DB_NAME} does not exist"
     check_operator_log
     exit 1
   fi
@@ -136,14 +136,14 @@ add_delete_consumer () {
   echo -e "${GREEN}==>${NOCOLOR} Delete the consumer"
   kubectl delete -f $1
   echo -e "${GREEN}==>${NOCOLOR} Check if the operator deletes the database"
-  DB_EXISTS=$(docker-compose exec -T mysql mysql --host=local-dbaas-provider --port=3306 -uroot -qfsBNe "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '${DB_NAME}';")
+  DB_EXISTS=$(docker-compose exec -T mysql mysql --host=${3:-local-dbaas-provider} --port=3306 -uroot -qfsBNe "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '${DB_NAME}';")
   if [[ ! -z "${DB_EXISTS}" ]]
   then 
-    echo "database ${DB_EXISTS} exists"
+    echo "database ${DB_NAME} exists"
     check_operator_log
     exit 1
   else 
-    echo "database ${DB_EXISTS} does not exist"
+    echo "database ${DB_NAME} does not exist"
   fi
 }
 
@@ -195,8 +195,8 @@ kubectl apply -f test-resources/provider-multi.yaml
 echo -e "${GREEN}====>${NOCOLOR} Test multi providers"
 echo "Test adding a blank consumer with a specific environment type, but of a type that has multiple providers available"
 echo "This test should create the database and user, and the associated services randomly, but choose the lowest table/schema count provider"
-docker-compose exec -T mysql mysql --host=local-dbaas-provider-multi --port=3306 -uroot -e "CREATE DATABASE IF NOT EXISTS multidb;"
-docker-compose exec -T mysql mysql --host=local-dbaas-provider-multi --port=3306 -uroot multidb < test-resources/multi-data.sql
+echo -e "${GREEN}======>${NOCOLOR} Create db multidb"
+docker-compose exec -T mysql mysql --host=local-dbaas-provider-multi --port=3306 -uroot -e "CREATE DATABASE IF NOT EXISTS multidb;CREATE TABLE multidb.Persons (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb.Persons2 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb.Persons3 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb.Persons4 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));"
 
 echo -e "${GREEN}====>${NOCOLOR} Test blank multi consumer"
 add_delete_consumer test-resources/consumer-multi.yaml mariadbconsumer-testing-multi
@@ -207,13 +207,13 @@ echo -e "${GREEN}====>${NOCOLOR} Test multi providers part 2"
 echo "Test adding a blank consumer with a specific environment type, but of a type that has multiple providers available"
 echo "This test should create the database and user, and the associated services randomly, but choose the lowest table/schema count provider"
 echo "This test adds additional tables to the first provider, so it should choose the second provider"
-docker-compose exec -T mysql mysql --host=local-dbaas-provider --port=3306 -uroot -e "CREATE DATABASE IF NOT EXISTS multidb;"
-docker-compose exec -T mysql mysql --host=local-dbaas-provider --port=3306 -uroot multidb < test-resources/multi-data.sql
-docker-compose exec -T mysql mysql --host=local-dbaas-provider --port=3306 -uroot -e "CREATE DATABASE IF NOT EXISTS multidb2;"
-docker-compose exec -T mysql mysql --host=local-dbaas-provider --port=3306 -uroot multidb2 < test-resources/multi-data.sql
+echo -e "${GREEN}======>${NOCOLOR} Create db multidb"
+docker-compose exec -T mysql mysql --host=local-dbaas-provider --port=3306 -uroot -e "CREATE DATABASE IF NOT EXISTS multidb;CREATE TABLE multidb.Persons (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb.Persons2 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb.Persons3 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb.Persons4 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));"
+echo -e "${GREEN}======>${NOCOLOR} Create db multidb2"
+docker-compose exec -T mysql mysql --host=local-dbaas-provider --port=3306 -uroot -e "CREATE DATABASE IF NOT EXISTS multidb2;CREATE TABLE multidb2.Persons (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb2.Persons2 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb2.Persons3 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb2.Persons4 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));"
 
 echo -e "${GREEN}====>${NOCOLOR} Test blank multi consumer part 2"
-add_delete_consumer test-resources/consumer-multi2.yaml mariadbconsumer-testing-multi2
+add_delete_consumer test-resources/consumer-multi2.yaml mariadbconsumer-testing-multi2 local-dbaas-provider-multi
 echo -e "${YELLOW}====>${NOCOLOR} Multi consumer 2 logs"
 check_operator_log | grep mariadbconsumer-testing-multi2
 echo ""; echo ""

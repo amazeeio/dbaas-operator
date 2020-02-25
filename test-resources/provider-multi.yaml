@@ -4,9 +4,9 @@ metadata:
   name: mariadbprovider-testing-multi1
 spec:
   environment: multi
-  hostname: 172.17.0.1.nip.io
+  hostname: multi1.mariadb.172.17.0.1.nip.io
   readReplicaHostnames:
-  - 172.17.0.1.nip.io
+  - multi1.mariadb.172.17.0.1.nip.io
   password: password
   port: '33066'
   user: root
@@ -17,9 +17,9 @@ metadata:
   name: mariadbprovider-testing-multi2
 spec:
   environment: multi
-  hostname: 172.17.0.1.nip.io
+  hostname: multi2.mariadb.172.17.0.1.nip.io
   readReplicaHostnames:
-  - 172.17.0.1.nip.io
+  - multi2.mariadb.172.17.0.1.nip.io
   password: password
   port: '33067'
   user: root

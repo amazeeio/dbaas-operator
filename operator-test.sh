@@ -40,6 +40,7 @@ start_up () {
     sleep 5
   else
     echo "Timeout of $CHECK_TIMEOUT for database provider startup reached"
+    tear_down
     exit 1
   fi
   done
@@ -52,6 +53,7 @@ start_up () {
     sleep 5
   else
     echo "Timeout of $CHECK_TIMEOUT for multi database provider startup reached"
+    tear_down
     exit 1
   fi
   done
@@ -83,6 +85,7 @@ build_deploy_operator () {
   else
     echo "Timeout of $CHECK_TIMEOUT for operator startup reached"
     check_operator_log
+    tear_down
     exit 1
   fi
   done
@@ -113,6 +116,7 @@ add_delete_consumer () {
   else
     echo "Timeout of $CHECK_TIMEOUT for database creation reached"
     check_operator_log
+    tear_down
     exit 1
   fi
   done
@@ -127,6 +131,7 @@ add_delete_consumer () {
   else 
     echo "database ${DB_NAME} does not exist"
     check_operator_log
+    tear_down
     exit 1
   fi
 
@@ -141,6 +146,7 @@ add_delete_consumer () {
   then 
     echo "database ${DB_NAME} exists"
     check_operator_log
+    tear_down
     exit 1
   else 
     echo "database ${DB_NAME} does not exist"

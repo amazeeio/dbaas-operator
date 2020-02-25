@@ -1,0 +1,25 @@
+apiVersion: mariadb.amazee.io/v1
+kind: MariaDBProvider
+metadata:
+  name: mariadbprovider-testing-multi1
+spec:
+  environment: multi
+  hostname: multi1.mariadb.172.17.0.1.nip.io
+  readReplicaHostnames:
+  - multi1.mariadb.172.17.0.1.nip.io
+  password: password
+  port: '33066'
+  user: root
+---
+apiVersion: mariadb.amazee.io/v1
+kind: MariaDBProvider
+metadata:
+  name: mariadbprovider-testing-multi2
+spec:
+  environment: multi
+  hostname: multi2.mariadb.172.17.0.1.nip.io
+  readReplicaHostnames:
+  - multi2.mariadb.172.17.0.1.nip.io
+  password: password
+  port: '33067'
+  user: root

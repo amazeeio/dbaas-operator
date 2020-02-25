@@ -38,6 +38,7 @@ type MariaDBProviderReconciler struct {
 	Password             string
 	Port                 string
 	Username             string
+	Type                 string
 }
 
 // +kubebuilder:rbac:groups=mariadb.amazee.io,resources=mariadbproviders,verbs=get;list;watch;create;update;patch;delete

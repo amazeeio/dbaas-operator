@@ -145,8 +145,13 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 			// some providers need to do special things, like azure
 			switch provider.Type {
 			case "azure":
-				// mariaDBConsumer.Spec.Consumer.Azure.Username = mariaDBConsumer.Spec.Consumer.Username
-				mariaDBConsumer.Spec.Consumer.Username = mariaDBConsumer.Spec.Consumer.Username + "@" + provider.Hostname
+				// the hostname can't be more than 60 characters long, we should check this and fail sooner
+				hostName := strings.Split(provider.Hostname, ".")
+				if len(hostName[0]) > 60 {
+					opLog.Error(errors.New("Hostname is too long"), fmt.Sprintf("Hostname %s is longer than 60 characters", hostName[0]))
+					return ctrl.Result{}, errors.New("Hostname is too long")
+				}
+				mariaDBConsumer.Spec.Consumer.Username = mariaDBConsumer.Spec.Consumer.Username + "@" + hostName[0]
 			}
 			if len(mariaDBConsumer.Spec.Provider.ReadReplicaHostnames) == 0 {
 				for _, replica := range provider.ReadReplicaHostnames {
@@ -272,15 +277,13 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 	// check the providers we have
 	provider := &mariadbv1.MariaDBProviderSpec{}
 	if err := r.getMariaDBProvider(provider, mariaDBConsumer, opLog); err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to get provider %s - %s in namespace %s, something went wrong", provider.Name, provider.Hostname, provider.Namespace))
 		return err
 	}
 	if provider.Hostname == "" {
 		return errors.New("Unable to determine server to deprovision from")
 	}
 	opLog.Info(fmt.Sprintf("Dropping database %s on host %s - %s/%s", mariaDBConsumer.Spec.Consumer.Database, provider.Hostname, provider.Namespace, provider.Name))
-	if err := dropDatabase(*provider, *mariaDBConsumer); err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to drop database %s on host %s - %s/%s", mariaDBConsumer.Spec.Consumer.Database, provider.Hostname, provider.Namespace, provider.Name))
+	if err := dropDbAndUser(*provider, *mariaDBConsumer); err != nil {
 		return err
 	}
 	// Delete the primary
@@ -292,8 +295,7 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 	}
 	opLog.Info(fmt.Sprintf("Deleting service %s in namespace %s", service.ObjectMeta.Name, service.ObjectMeta.Namespace))
 	if err := r.Delete(context.TODO(), service); ignoreNotFound(err) != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to delete service %s in %s", service.ObjectMeta.Name, service.ObjectMeta.Namespace))
-		return err
+		return fmt.Errorf("Unable to delete service %s in %s: %v", service.ObjectMeta.Name, service.ObjectMeta.Namespace, err)
 	}
 	// Delete the read replicas
 	for _, replica := range mariaDBConsumer.Spec.Consumer.Services.Replicas {
@@ -305,8 +307,7 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 		}
 		opLog.Info(fmt.Sprintf("Deleting service %s in namespace %s", serviceRR.ObjectMeta.Name, serviceRR.ObjectMeta.Namespace))
 		if err := r.Delete(context.TODO(), serviceRR); ignoreNotFound(err) != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to delete service %s in %s", serviceRR.ObjectMeta.Name, serviceRR.ObjectMeta.Namespace))
-			return err
+			return fmt.Errorf("Unable to delete service %s in %s: %v", serviceRR.ObjectMeta.Name, serviceRR.ObjectMeta.Namespace, err)
 		}
 	}
 	return nil
@@ -341,14 +342,14 @@ func randSeq(n int, dns bool) string {
 func createDatabaseIfNotExist(provider mariadbv1.MariaDBProviderSpec, consumer mariadbv1.MariaDBConsumer) error {
 	db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
 	if err != nil {
-		return err
+		return fmt.Errorf("Unable to connect to provider: %v", err)
 	}
 	defer db.Close()
 
 	createDB := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`;", consumer.Spec.Consumer.Database)
 	_, err = db.Exec(createDB)
 	if err != nil {
-		return err
+		return fmt.Errorf("Unable create database: %v", err)
 	}
 	var createUser string
 	switch provider.Type {
@@ -360,7 +361,12 @@ func createDatabaseIfNotExist(provider mariadbv1.MariaDBProviderSpec, consumer m
 	}
 	_, err = db.Exec(createUser)
 	if err != nil {
-		return err
+		// if user creation fails, drop the database that gets created
+		dropErr := dropDatabase(db, consumer.Spec.Consumer.Database)
+		if dropErr != nil {
+			return fmt.Errorf("Unable drop database after failed user creation: %v", dropErr)
+		}
+		return fmt.Errorf("Unable to create user %s, dropped database %s: %v", consumer.Spec.Consumer.Username, consumer.Spec.Consumer.Database, err)
 	}
 	var grantUser string
 	switch provider.Type {
@@ -372,28 +378,56 @@ func createDatabaseIfNotExist(provider mariadbv1.MariaDBProviderSpec, consumer m
 	}
 	_, err = db.Exec(grantUser)
 	if err != nil {
-		return err
+		// if grants fails, drop the database and user that gets created
+		dropErr := dropDatabase(db, consumer.Spec.Consumer.Database)
+		if dropErr != nil {
+			return fmt.Errorf("Unable drop database after failed user grant: %v", dropErr)
+		}
+		dropErr = dropUser(db, consumer, provider)
+		if dropErr != nil {
+			return fmt.Errorf("Unable drop user after failed user grant: %v", dropErr)
+		}
+		return fmt.Errorf("Unable to grant user %s permissions on database %s: %v", consumer.Spec.Consumer.Username, consumer.Spec.Consumer.Database, err)
 	}
 	_, err = db.Exec("FLUSH PRIVILEGES;")
+	if err != nil {
+		return fmt.Errorf("Unable flush privileges: %v", err)
+	}
+	return nil
+}
+
+func dropDbAndUser(provider mariadbv1.MariaDBProviderSpec, consumer mariadbv1.MariaDBConsumer) error {
+	db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
+	if err != nil {
+		return fmt.Errorf("Unable to connect to provider: %v", err)
+	}
+	defer db.Close()
+
+	err = dropDatabase(db, consumer.Spec.Consumer.Database)
+	if err != nil {
+		return fmt.Errorf("Unable drop database %s: %v", consumer.Spec.Consumer.Database, err)
+	}
+	err = dropUser(db, consumer, provider)
+	if err != nil {
+		return fmt.Errorf("Unable drop user %s: %v", consumer.Spec.Consumer.Username, err)
+	}
+	_, err = db.Exec("FLUSH PRIVILEGES;")
+	if err != nil {
+		return fmt.Errorf("Unable flush privileges: %v", err)
+	}
+	return nil
+}
+
+func dropDatabase(db *sql.DB, database string) error {
+	dropDB := fmt.Sprintf("DROP DATABASE `%s`;", database)
+	_, err := db.Exec(dropDB)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func dropDatabase(provider mariadbv1.MariaDBProviderSpec, consumer mariadbv1.MariaDBConsumer) error {
-	db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	dropDB := fmt.Sprintf("DROP DATABASE `%s`;", consumer.Spec.Consumer.Database)
-	_, err = db.Exec(dropDB)
-	if err != nil {
-		return err
-	}
-	// delete db user
+func dropUser(db *sql.DB, consumer mariadbv1.MariaDBConsumer, provider mariadbv1.MariaDBProviderSpec) error {
 	var dropUser string
 	switch provider.Type {
 	case "azure":
@@ -402,11 +436,7 @@ func dropDatabase(provider mariadbv1.MariaDBProviderSpec, consumer mariadbv1.Mar
 	default:
 		dropUser = fmt.Sprintf("DROP USER `%s`@'%%';", consumer.Spec.Consumer.Username)
 	}
-	_, err = db.Exec(dropUser)
-	if err != nil {
-		return err
-	}
-	_, err = db.Exec("FLUSH PRIVILEGES;")
+	_, err := db.Exec(dropUser)
 	if err != nil {
 		return err
 	}
@@ -422,8 +452,7 @@ func getMariaDBUsage(provider mariadbv1.MariaDBProviderSpec, opLog logr.Logger) 
 
 	db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
 	if err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to connect to %s using %s", provider.Hostname, provider.Username))
-		return currentUsage, err
+		return currentUsage, fmt.Errorf("Unable to connect to %s using %s: %v", provider.Hostname, provider.Username, err)
 	}
 	defer db.Close()
 	var tableCountQuery = `SELECT COUNT(1) AS TableCount
@@ -431,15 +460,13 @@ func getMariaDBUsage(provider mariadbv1.MariaDBProviderSpec, opLog logr.Logger) 
 	WHERE table_schema NOT IN ('information_schema','mysql', 'sys');`
 	result, err := db.Query(tableCountQuery)
 	if err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to execute query %s on %s", tableCountQuery, provider.Hostname))
-		return currentUsage, err
+		return currentUsage, fmt.Errorf("Unable to execute query %s on %s: %v", tableCountQuery, provider.Hostname, err)
 	}
 	for result.Next() {
 		var value int
 		err = result.Scan(&value)
 		if err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to scan results for query %s on %s", tableCountQuery, provider.Hostname))
-			return currentUsage, err
+			return currentUsage, fmt.Errorf("Unable to scan results for query %s on %s: %v", tableCountQuery, provider.Hostname, err)
 		}
 		opLog.Info(fmt.Sprintf("Table count on host %s has reached %v - %s/%s", provider.Hostname, value, provider.Namespace, provider.Name))
 		currentUsage.TableCount = value
@@ -450,15 +477,13 @@ func getMariaDBUsage(provider mariadbv1.MariaDBProviderSpec, opLog logr.Logger) 
 	WHERE schema_name NOT IN ('information_schema','mysql', 'sys');`
 	result, err = db.Query(schemaCountQuery)
 	if err != nil {
-		opLog.Error(err, fmt.Sprintf("Unable to execute query %s on %s", schemaCountQuery, provider.Hostname))
-		return currentUsage, err
+		return currentUsage, fmt.Errorf("Unable to execute query %s on %s: %v", schemaCountQuery, provider.Hostname, err)
 	}
 	for result.Next() {
 		var value int
 		err = result.Scan(&value)
 		if err != nil {
-			opLog.Error(err, fmt.Sprintf("Unable to scan results for query %s on %s", schemaCountQuery, provider.Hostname))
-			return currentUsage, err
+			return currentUsage, fmt.Errorf("Unable to scan results for query %s on %s: %v", schemaCountQuery, provider.Hostname, err)
 		}
 		opLog.Info(fmt.Sprintf("Schema count on host %s has reached %v - %s/%s", provider.Hostname, value, provider.Namespace, provider.Name))
 		currentUsage.SchemaCount = value
@@ -473,8 +498,7 @@ func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *mariadbv1.Ma
 	providers := &mariadbv1.MariaDBProviderList{}
 	src := providers.DeepCopyObject()
 	if err := r.List(context.TODO(), src.(*mariadbv1.MariaDBProviderList)); err != nil {
-		opLog.Error(err, "Unable to list providers in the cluster, there may be none or something went wrong")
-		return err
+		return fmt.Errorf("Unable to list providers in the cluster, there may be none or something went wrong: %v", err)
 	}
 	providersList := src.(*mariadbv1.MariaDBProviderList)
 
@@ -500,8 +524,7 @@ func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *mariadbv1.Ma
 			}
 			currentUsage, err := getMariaDBUsage(mDBProvider, r.Log.WithValues("mariadbconsumer", namespaceName))
 			if err != nil {
-				opLog.Error(err, "Unable to get provider usage, something went wrong")
-				return err
+				return fmt.Errorf("Unable to get provider usage, something went wrong: %v", err)
 			}
 
 			if lowestTableCount < 0 || currentUsage.TableCount < lowestTableCount {
@@ -541,8 +564,7 @@ func (r *MariaDBConsumerReconciler) getMariaDBProvider(provider *mariadbv1.Maria
 	providers := &mariadbv1.MariaDBProviderList{}
 	src := providers.DeepCopyObject()
 	if err := r.List(context.TODO(), src.(*mariadbv1.MariaDBProviderList)); err != nil {
-		opLog.Error(err, "Unable to list providers in the cluster, there may be none or something went wrong")
-		return err
+		return fmt.Errorf("Unable to list providers in the cluster, there may be none or something went wrong: %v", err)
 	}
 	providersList := src.(*mariadbv1.MariaDBProviderList)
 	for _, v := range providersList.Items {

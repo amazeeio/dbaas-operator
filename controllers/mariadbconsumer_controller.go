@@ -362,9 +362,9 @@ func createDatabaseIfNotExist(provider mariadbv1.MariaDBProviderSpec, consumer m
 	_, err = db.Exec(createUser)
 	if err != nil {
 		// if user creation fails, drop the database that gets created
-		err = dropDatabase(db, consumer.Spec.Consumer.Database)
-		if err != nil {
-			return fmt.Errorf("Unable drop database after failed user creation: %v", err)
+		dropErr := dropDatabase(db, consumer.Spec.Consumer.Database)
+		if dropErr != nil {
+			return fmt.Errorf("Unable drop database after failed user creation: %v", dropErr)
 		}
 		return fmt.Errorf("Unable to create user %s, dropped database %s: %v", consumer.Spec.Consumer.Username, consumer.Spec.Consumer.Database, err)
 	}
@@ -379,13 +379,13 @@ func createDatabaseIfNotExist(provider mariadbv1.MariaDBProviderSpec, consumer m
 	_, err = db.Exec(grantUser)
 	if err != nil {
 		// if grants fails, drop the database and user that gets created
-		err = dropDatabase(db, consumer.Spec.Consumer.Database)
-		if err != nil {
-			return fmt.Errorf("Unable drop database after failed user grant: %v", err)
+		dropErr := dropDatabase(db, consumer.Spec.Consumer.Database)
+		if dropErr != nil {
+			return fmt.Errorf("Unable drop database after failed user grant: %v", dropErr)
 		}
-		err = dropUser(db, consumer, provider)
-		if err != nil {
-			return fmt.Errorf("Unable drop user after failed user grant: %v", err)
+		dropErr = dropUser(db, consumer, provider)
+		if dropErr != nil {
+			return fmt.Errorf("Unable drop user after failed user grant: %v", dropErr)
 		}
 		return fmt.Errorf("Unable to grant user %s permissions on database %s: %v", consumer.Spec.Consumer.Username, consumer.Spec.Consumer.Database, err)
 	}

@@ -153,6 +153,15 @@ add_delete_consumer () {
   fi
 }
 
+add_delete_consumer_failure () {
+  echo -e "${GREEN}====>${NOCOLOR} Add a consumer"
+  kubectl apply -f $1
+  echo -e "${GREEN}==>${NOCOLOR} Wait for consumer to fail"
+  sleep 5
+  echo -e "${GREEN}==>${NOCOLOR} Delete the consumer"
+  kubectl delete -f $1
+}
+
 start_up
 start_kind
 build_deploy_operator
@@ -183,13 +192,14 @@ add_delete_consumer test-resources/consumer-test-2.yaml mariadbconsumer-testing-
 echo -e "${YELLOW}====>${NOCOLOR} Seeded consumer 2 logs"
 check_operator_log | grep mariadbconsumer-testing-testing-3
 
+
 echo -e "${GREEN}==>${NOCOLOR} Add an azure provider"
 kubectl apply -f test-resources/provider-azure.yaml
 
 echo -e "${GREEN}====>${NOCOLOR} Test blank azure consumer"
 echo "Test adding a blank consumer with a specific environment type, but for azure"
 echo "This test should create the database and user, and the associated services randomly"
-echo "As this is for azure, the username should be `username@azurehostname`"
+echo "As this is for azure, the username should be 'username@azurehostname'"
 add_delete_consumer test-resources/consumer-azure.yaml mariadbconsumer-testing-azure
 echo -e "${YELLOW}====>${NOCOLOR} Azure consumer logs"
 check_operator_log | grep mariadbconsumer-testing-azure
@@ -208,6 +218,7 @@ echo -e "${GREEN}====>${NOCOLOR} Test blank multi consumer"
 add_delete_consumer test-resources/consumer-multi.yaml mariadbconsumer-testing-multi
 echo -e "${YELLOW}====>${NOCOLOR} Multi consumer logs"
 check_operator_log | grep mariadbconsumer-testing-multi
+docker-compose exec -T mysql mysql --host=local-dbaas-provider-multi --port=3306 -uroot -e "DROP DATABASE multidb;"
 
 echo -e "${GREEN}====>${NOCOLOR} Test multi providers part 2"
 echo "Test adding a blank consumer with a specific environment type, but of a type that has multiple providers available"
@@ -222,7 +233,25 @@ echo -e "${GREEN}====>${NOCOLOR} Test blank multi consumer part 2"
 add_delete_consumer test-resources/consumer-multi2.yaml mariadbconsumer-testing-multi2 local-dbaas-provider-multi
 echo -e "${YELLOW}====>${NOCOLOR} Multi consumer 2 logs"
 check_operator_log | grep mariadbconsumer-testing-multi2
+docker-compose exec -T mysql mysql --host=local-dbaas-provider --port=3306 -uroot -e "DROP DATABASE multidb;"
+docker-compose exec -T mysql mysql --host=local-dbaas-provider --port=3306 -uroot -e "DROP DATABASE multidb2;"
+
+echo -e "${GREEN}====>${NOCOLOR} Test blank azure consumer with long hostname"
+echo "Test adding a blank consumer with a specific environment type, but for azure"
+echo "This test should attempt to create the database, but fail at the user creation"
+echo "As this is for azure, the username should be 'username@azurehostname'"
+echo "Testing for the failure, it should give up trying to create the user"
+add_delete_consumer_failure test-resources/consumer-azure-long.yaml mariadbconsumer-testing-azure-long
+echo -e "${YELLOW}====>${NOCOLOR} Azure consumer logs"
+check_operator_log | grep mariadbconsumer-testing-azure-long
+DB_EXISTS=$(docker-compose exec -T mysql mysql --host=${3:-local-dbaas-provider} --port=3306 -uroot -qfsBNe "SELECT schema_name FROM information_schema.schemata;" | egrep -v "information_schema|^db|performance_schema|mysql")
+if [[ ! -z "${DB_EXISTS}" ]]
+then
+    echo "databases exist when they shouldn't"
+    check_operator_log
+    tear_down
+    exit 1
+fi
 echo ""; echo ""
-check_operator_log
 tear_down
 echo -e "${GREEN}================ END ================${NOCOLOR}"

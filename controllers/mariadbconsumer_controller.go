@@ -355,8 +355,8 @@ func createDatabaseIfNotExist(provider mariadbv1.MariaDBProviderSpec, consumer m
 	switch provider.Type {
 	case "azure":
 		userName := strings.Split(consumer.Spec.Consumer.Username, "@")
-		hostName := strings.Split(provider.Hostname, ".")
-		createUser = fmt.Sprintf("CREATE USER IF NOT EXISTS `%s`@'%s' IDENTIFIED BY '%s';", userName[0], hostName[0], consumer.Spec.Consumer.Password)
+		// hostName := strings.Split(provider.Hostname, ".")
+		createUser = fmt.Sprintf("CREATE USER IF NOT EXISTS `%s`@'%%' IDENTIFIED BY '%s';", userName[0], consumer.Spec.Consumer.Password)
 	default:
 		createUser = fmt.Sprintf("CREATE USER IF NOT EXISTS `%s`@'%%' IDENTIFIED BY '%s';", consumer.Spec.Consumer.Username, consumer.Spec.Consumer.Password)
 	}
@@ -373,8 +373,8 @@ func createDatabaseIfNotExist(provider mariadbv1.MariaDBProviderSpec, consumer m
 	switch provider.Type {
 	case "azure":
 		userName := strings.Split(consumer.Spec.Consumer.Username, "@")
-		hostName := strings.Split(provider.Hostname, ".")
-		grantUser = fmt.Sprintf("GRANT ALL ON `%s`.* TO `%s`@'%s';", consumer.Spec.Consumer.Database, userName[0], hostName[0])
+		// hostName := strings.Split(provider.Hostname, ".")
+		grantUser = fmt.Sprintf("GRANT ALL ON `%s`.* TO `%s`@'%%';", consumer.Spec.Consumer.Database, userName[0])
 	default:
 		grantUser = fmt.Sprintf("GRANT ALL ON `%s`.* TO `%s`@'%%';", consumer.Spec.Consumer.Database, consumer.Spec.Consumer.Username)
 	}
@@ -434,8 +434,8 @@ func dropUser(db *sql.DB, consumer mariadbv1.MariaDBConsumer, provider mariadbv1
 	switch provider.Type {
 	case "azure":
 		userName := strings.Split(consumer.Spec.Consumer.Username, "@")
-		hostName := strings.Split(provider.Hostname, ".")
-		dropUser = fmt.Sprintf("DROP USER `%s`@'%s';", userName[0], hostName[0])
+		// hostName := strings.Split(provider.Hostname, ".")
+		dropUser = fmt.Sprintf("DROP USER `%s`@'%%';", userName[0])
 	default:
 		dropUser = fmt.Sprintf("DROP USER `%s`@'%%';", consumer.Spec.Consumer.Username)
 	}

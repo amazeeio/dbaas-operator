@@ -354,8 +354,9 @@ func createDatabaseIfNotExist(provider mariadbv1.MariaDBProviderSpec, consumer m
 	var createUser string
 	switch provider.Type {
 	case "azure":
-		username := strings.Split(consumer.Spec.Consumer.Username, "@")
-		createUser = fmt.Sprintf("CREATE USER IF NOT EXISTS `%s`@'%s' IDENTIFIED BY '%s';", username[0], provider.Hostname, consumer.Spec.Consumer.Password)
+		userName := strings.Split(consumer.Spec.Consumer.Username, "@")
+		hostName := strings.Split(provider.Hostname, ".")
+		createUser = fmt.Sprintf("CREATE USER IF NOT EXISTS `%s`@'%s' IDENTIFIED BY '%s';", userName[0], hostName[0], consumer.Spec.Consumer.Password)
 	default:
 		createUser = fmt.Sprintf("CREATE USER IF NOT EXISTS `%s`@'%%' IDENTIFIED BY '%s';", consumer.Spec.Consumer.Username, consumer.Spec.Consumer.Password)
 	}
@@ -371,8 +372,9 @@ func createDatabaseIfNotExist(provider mariadbv1.MariaDBProviderSpec, consumer m
 	var grantUser string
 	switch provider.Type {
 	case "azure":
-		username := strings.Split(consumer.Spec.Consumer.Username, "@")
-		grantUser = fmt.Sprintf("GRANT ALL ON `%s`.* TO `%s`@'%s';", consumer.Spec.Consumer.Database, username[0], provider.Hostname)
+		userName := strings.Split(consumer.Spec.Consumer.Username, "@")
+		hostName := strings.Split(provider.Hostname, ".")
+		grantUser = fmt.Sprintf("GRANT ALL ON `%s`.* TO `%s`@'%s';", consumer.Spec.Consumer.Database, userName[0], hostName[0])
 	default:
 		grantUser = fmt.Sprintf("GRANT ALL ON `%s`.* TO `%s`@'%%';", consumer.Spec.Consumer.Database, consumer.Spec.Consumer.Username)
 	}
@@ -431,8 +433,9 @@ func dropUser(db *sql.DB, consumer mariadbv1.MariaDBConsumer, provider mariadbv1
 	var dropUser string
 	switch provider.Type {
 	case "azure":
-		username := strings.Split(consumer.Spec.Consumer.Username, "@")
-		dropUser = fmt.Sprintf("DROP USER `%s`@'%s';", username[0], provider.Hostname)
+		userName := strings.Split(consumer.Spec.Consumer.Username, "@")
+		hostName := strings.Split(provider.Hostname, ".")
+		dropUser = fmt.Sprintf("DROP USER `%s`@'%s';", userName[0], hostName[0])
 	default:
 		dropUser = fmt.Sprintf("DROP USER `%s`@'%%';", consumer.Spec.Consumer.Username)
 	}

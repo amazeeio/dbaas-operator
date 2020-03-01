@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	mariadbv1 "github.com/amazeeio/dbaas-operator/api/v1"
+	mariadbv1 "github.com/amazeeio/dbaas-operator/apis/mariadb/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"

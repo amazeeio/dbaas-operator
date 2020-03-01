@@ -19,8 +19,8 @@ import (
 	"flag"
 	"os"
 
-	mariadbv1 "github.com/amazeeio/dbaas-operator/api/v1"
-	"github.com/amazeeio/dbaas-operator/controllers"
+	mariadbv1 "github.com/amazeeio/dbaas-operator/apis/mariadb/v1"
+	mariadbcontroller "github.com/amazeeio/dbaas-operator/controllers/mariadb"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -64,7 +64,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.MariaDBConsumerReconciler{
+	if err = (&mariadbcontroller.MariaDBConsumerReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("MariaDBConsumer"),
 		Scheme: mgr.GetScheme(),
@@ -72,7 +72,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "MariaDBConsumer")
 		os.Exit(1)
 	}
-	if err = (&controllers.MariaDBProviderReconciler{
+	if err = (&mariadbcontroller.MariaDBProviderReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("MariaDBProvider"),
 		Scheme: mgr.GetScheme(),

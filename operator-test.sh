@@ -3,6 +3,7 @@
 NOCOLOR='\033[0m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+LIGHTBLUE='\033[1;34m'
 
 #KIND_VER=v1.13.12
 #KIND_VER=v1.14.10
@@ -181,6 +182,63 @@ add_delete_consumer_mariadb () {
   fi
 }
 
+add_delete_consumer_psql () {
+  echo -e "${GREEN}====>${NOCOLOR} Add a consumer"
+  kubectl apply -f $1
+  CHECK_COUNTER=1
+  until kubectl get postgresqlconsumer/$2 -o json | jq -e '.spec.consumer.database?'
+  do
+  if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
+    let CHECK_COUNTER=CHECK_COUNTER+1
+    echo "Database not created yet"
+    sleep 5
+  else
+    echo "Timeout of $CHECK_TIMEOUT for database creation reached"
+    check_operator_log
+    tear_down
+    exit 1
+  fi
+  done
+  echo -e "${GREEN}====>${NOCOLOR} Get PostgreSQLConsumer"
+  kubectl get postgresqlconsumer/$2 -o yaml
+  DB_NAME=$(kubectl get postgresqlconsumer/$2 -o json | jq -r '.spec.consumer.database')
+  echo -e "${GREEN}==>${NOCOLOR} Check if the operator creates the database"
+  DB_EXISTS=$(docker run -it -e PGPASSWORD=password postgres psql -h postgres.172.17.0.1.xip.io -p 5432 -U postgres postgres --no-align --tuples-only -c "SELECT datname FROM pg_database;" | grep -q "${DB_NAME}")
+  if [[ -z "${DB_EXISTS}" ]]
+  then 
+    echo "database ${DB_NAME} exists"
+  else 
+    echo "database ${DB_NAME} does not exist"
+    check_operator_log
+    tear_down
+    exit 1
+  fi
+
+  echo -e "${GREEN}==>${NOCOLOR} Check services"
+  check_services $2 postgresqlconsumer
+
+  echo -e "${GREEN}==>${NOCOLOR} Delete the consumer"
+  timeout 60 kubectl delete -f $1
+  if [ $? -ne 0 ]
+  then
+    echo "failed to delete consumer"
+    check_operator_log
+    tear_down
+    exit 1
+  fi
+  echo -e "${GREEN}==>${NOCOLOR} Check if the operator deletes the database"
+  DB_EXISTS=$(docker run -it -e PGPASSWORD=password postgres psql -h postgres.172.17.0.1.xip.io -p 5432 -U postgres postgres --no-align --tuples-only -c "SELECT datname FROM pg_database;" | grep -q "${DB_NAME}")
+  if [[ ! -z "${DB_EXISTS}" ]]
+  then 
+    echo "database ${DB_NAME} exists"
+    check_operator_log
+    tear_down
+    exit 1
+  else 
+    echo "database ${DB_NAME} does not exist"
+  fi
+}
+
 add_delete_consumer_failure () {
   echo -e "${GREEN}====>${NOCOLOR} Add a consumer"
   kubectl apply -f $1
@@ -280,6 +338,16 @@ then
     tear_down
     exit 1
 fi
+
+echo -e "${GREEN}==>${LIGHTBLUE}PostgreSQL: ${NOCOLOR} Test PostgreSQL"
+echo -e "${GREEN}====>${LIGHTBLUE}PostgreSQL: ${NOCOLOR} Add a provider"
+kubectl apply -f test-resources/postgres/provider.yaml
+kubectl get postgresqlprovider/postgreprovider-testing -o yaml
+
+echo -e "${GREEN}====>${LIGHTBLUE}PostgreSQL: ${NOCOLOR} Test blank consumer"
+add_delete_consumer_psql test-resources/postgres/consumer.yaml psqlconsumer-testing
+echo -e "${YELLOW}====>${LIGHTBLUE}PostgreSQL: ${NOCOLOR} Blank consumer logs"
+check_operator_log | grep psqlconsumer-testing
 echo ""; echo ""
 tear_down
 echo -e "${GREEN}================ END ================${NOCOLOR}"

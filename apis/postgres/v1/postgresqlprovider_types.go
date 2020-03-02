@@ -35,6 +35,7 @@ type PostgreSQLProviderSpec struct {
 	Username    string `json:"user,omitempty"`
 	Name        string `json:"name,omitempty"`
 	Namespace   string `json:"namespace,omitempty"`
+	Type        string `json:"type,omitempty"`
 }
 
 // PostgreSQLProviderStatus defines the observed state of PostgreSQLProvider

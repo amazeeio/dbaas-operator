@@ -47,6 +47,8 @@ spec:
               type: string
             port:
               type: string
+            type:
+              type: string
             user:
               type: string
           type: object

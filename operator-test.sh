@@ -71,9 +71,9 @@ start_up () {
   echo -e "${GREEN}==>${NOCOLOR} Bring up local provider"
   docker-compose up -d
   CHECK_COUNTER=1
-  echo "==> Ensure mariadb database providers are running"
+  echo -e "${GREEN}==> Ensure mariadb database providers are running${NOCOLOR}"
   mariadb_start_check
-  echo "==> Ensure postgres database provider is running"
+  echo -e "${LIGHTBLUE}==> Ensure postgres database provider is running${NOCOLOR}"
   postgres_start_check
 }
 
@@ -164,7 +164,7 @@ add_delete_consumer_mariadb () {
   timeout 60 kubectl delete -f $1
   if [ $? -ne 0 ]
   then 
-    echo "failed to delete consumer"
+    echo "timed out waiting to delete consumer, check the logs to see why"
     check_operator_log
     tear_down
     exit 1
@@ -203,7 +203,7 @@ add_delete_consumer_psql () {
   kubectl get postgresqlconsumer/$2 -o yaml
   DB_NAME=$(kubectl get postgresqlconsumer/$2 -o json | jq -r '.spec.consumer.database')
   echo -e "${GREEN}==>${NOCOLOR} Check if the operator creates the database"
-  DB_EXISTS=$(docker run -it -e PGPASSWORD=password postgres psql -h postgres.172.17.0.1.xip.io -p 5432 -U postgres postgres --no-align --tuples-only -c "SELECT datname FROM pg_database;" | grep -q "${DB_NAME}")
+  DB_EXISTS=$(docker run -it -e PGPASSWORD=password postgres psql -h postgres.172.17.0.1.nip.io -p 5432 -U postgres postgres --no-align --tuples-only -c "SELECT datname FROM pg_database;" | grep -q "${DB_NAME}")
   if [[ -z "${DB_EXISTS}" ]]
   then 
     echo "database ${DB_NAME} exists"
@@ -221,13 +221,13 @@ add_delete_consumer_psql () {
   timeout 60 kubectl delete -f $1
   if [ $? -ne 0 ]
   then
-    echo "failed to delete consumer"
+    echo "timed out waiting to delete consumer, check the logs to see why"
     check_operator_log
     tear_down
     exit 1
   fi
   echo -e "${GREEN}==>${NOCOLOR} Check if the operator deletes the database"
-  DB_EXISTS=$(docker run -it -e PGPASSWORD=password postgres psql -h postgres.172.17.0.1.xip.io -p 5432 -U postgres postgres --no-align --tuples-only -c "SELECT datname FROM pg_database;" | grep -q "${DB_NAME}")
+  DB_EXISTS=$(docker run -it -e PGPASSWORD=password postgres psql -h postgres.172.17.0.1.nip.io -p 5432 -U postgres postgres --no-align --tuples-only -c "SELECT datname FROM pg_database;" | grep -q "${DB_NAME}")
   if [[ ! -z "${DB_EXISTS}" ]]
   then 
     echo "database ${DB_NAME} exists"

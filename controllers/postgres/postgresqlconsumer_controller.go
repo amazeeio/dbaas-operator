@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
@@ -125,6 +126,17 @@ func (r *PostgreSQLConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result,
 			if postgresqlConsumer.Spec.Provider.Name == "" {
 				postgresqlConsumer.Spec.Provider.Name = provider.Name
 			}
+			// some providers need to do special things, like azure
+			switch provider.Type {
+			case "azure":
+				// the hostname can't be more than 60 characters long, we should check this and fail sooner
+				hostName := strings.Split(provider.Hostname, ".")
+				if len(hostName[0]) > 60 {
+					opLog.Error(errors.New("Hostname is too long"), fmt.Sprintf("Hostname %s is longer than 60 characters", hostName[0]))
+					return ctrl.Result{}, errors.New("Hostname is too long")
+				}
+				postgresqlConsumer.Spec.Consumer.Username = postgresqlConsumer.Spec.Consumer.Username + "@" + hostName[0]
+			}
 			if postgresqlConsumer.Spec.Provider.Namespace == "" {
 				postgresqlConsumer.Spec.Provider.Namespace = provider.Namespace
 			}
@@ -205,7 +217,7 @@ func (r *PostgreSQLConsumerReconciler) deleteExternalResources(postgresqlConsume
 		return errors.New("Unable to determine server to deprovision from")
 	}
 	opLog.Info(fmt.Sprintf("Dropping database %s on host %s - %s/%s", postgresqlConsumer.Spec.Consumer.Database, provider.Hostname, provider.Namespace, provider.Name))
-	if err := dropDatabase(*provider, *postgresqlConsumer); err != nil {
+	if err := dropDbAndUser(*provider, *postgresqlConsumer); err != nil {
 		return err
 	}
 	// Delete the primary
@@ -276,46 +288,93 @@ func removeString(slice []string, s string) (result []string) {
 }
 
 func createDatabaseIfNotExist(provider postgresv1.PostgreSQLProviderSpec, consumer postgresv1.PostgreSQLConsumer) error {
-	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s "+"password=%s dbname=%s sslmode=disable", provider.Hostname, provider.Port, provider.Username, provider.Password, "postgres")
+	sslMode := "disable"
+	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s "+"password=%s dbname=%s sslmode=%s", provider.Hostname, provider.Port, provider.Username, provider.Password, "postgres", sslMode)
 	db, err := sql.Open("postgres", psqlInfo)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
+	userName := []string{consumer.Spec.Consumer.Username}
+	switch provider.Type {
+	case "azure":
+		userName = strings.Split(consumer.Spec.Consumer.Username, "@")
+	}
+	// @TODO: check the equivalent of of create if not exists
+	createDB := fmt.Sprintf("CREATE DATABASE %s;", consumer.Spec.Consumer.Database)
+	_, err = db.Exec(createDB)
+	if err != nil {
+		return err
+	}
+	// @TODO: check the equivalent of of create if not exists
+	var createUser string
+	createUser = fmt.Sprintf("CREATE USER %s WITH ENCRYPTED PASSWORD '%s';", userName[0], consumer.Spec.Consumer.Password)
+	_, err = db.Exec(createUser)
+	if err != nil {
+		// if user creation fails, drop the database that gets created
+		dropErr := dropDatabase(db, consumer.Spec.Consumer.Database)
+		if dropErr != nil {
+			return fmt.Errorf("Unable drop database after failed user creation: %v", dropErr)
+		}
+		return fmt.Errorf("Unable to create user %s, dropped database %s: %v", consumer.Spec.Consumer.Username, consumer.Spec.Consumer.Database, err)
+	}
+	var grantUser string
+	grantUser = fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE %s TO %s;", consumer.Spec.Consumer.Database, userName[0])
+	_, err = db.Exec(grantUser)
+	if err != nil {
+		// if grants fails, drop the database and user that gets created
+		dropErr := dropDatabase(db, consumer.Spec.Consumer.Database)
+		if dropErr != nil {
+			return fmt.Errorf("Unable drop database after failed user grant: %v", dropErr)
+		}
+		dropErr = dropUser(db, consumer, provider)
+		if dropErr != nil {
+			return fmt.Errorf("Unable drop user after failed user grant: %v", dropErr)
+		}
+		return fmt.Errorf("Unable to grant user %s permissions on database %s: %v", userName[0], consumer.Spec.Consumer.Database, err)
+	}
+	return nil
+}
 
-	// @TODO: check the equivalent of of create if not exists
-	_, err = db.Exec("CREATE DATABASE " + consumer.Spec.Consumer.Database + ";")
-	// _, err = db.Exec("SELECT 'CREATE DATABASE `" + consumer.DatabaseName + "`'	WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '`" + consumer.DatabaseName + "`')\gexec")
+func dropDbAndUser(provider postgresv1.PostgreSQLProviderSpec, consumer postgresv1.PostgreSQLConsumer) error {
+	sslMode := "disable"
+	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s "+"password=%s dbname=%s sslmode=%s", provider.Hostname, provider.Port, provider.Username, provider.Password, "postgres", sslMode)
+	db, err := sql.Open("postgres", psqlInfo)
 	if err != nil {
-		return err
+		return fmt.Errorf("Unable to connect to provider: %v", err)
 	}
-	// @TODO: check the equivalent of of create if not exists
-	_, err = db.Exec("CREATE USER " + consumer.Spec.Consumer.Username + " WITH ENCRYPTED PASSWORD '" + consumer.Spec.Consumer.Password + "';")
-	// _, err = db.Exec("IF NOT EXISTS (SELECT * FROM pg_user WHERE username = `" + consumer.Username + "`) BEGIN CREATE ROLE my_user LOGIN PASSWORD '" + consumer.Password + "'; END")
+	defer db.Close()
+
+	err = dropDatabase(db, consumer.Spec.Consumer.Database)
 	if err != nil {
-		return err
+		return fmt.Errorf("Unable drop database %s: %v", consumer.Spec.Consumer.Database, err)
 	}
-	_, err = db.Exec("GRANT ALL PRIVILEGES ON DATABASE " + consumer.Spec.Consumer.Database + " TO " + consumer.Spec.Consumer.Username + ";")
+	err = dropUser(db, consumer, provider)
+	if err != nil {
+		return fmt.Errorf("Unable drop user %s: %v", consumer.Spec.Consumer.Username, err)
+	}
+	return nil
+}
+
+func dropDatabase(db *sql.DB, database string) error {
+	dropDB := fmt.Sprintf("DROP DATABASE %s;", database)
+	_, err := db.Exec(dropDB)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func dropDatabase(provider postgresv1.PostgreSQLProviderSpec, consumer postgresv1.PostgreSQLConsumer) error {
-	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s "+"password=%s dbname=%s sslmode=disable", provider.Hostname, provider.Port, provider.Username, provider.Password, "postgres")
-	db, err := sql.Open("postgres", psqlInfo)
-	if err != nil {
-		return err
+func dropUser(db *sql.DB, consumer postgresv1.PostgreSQLConsumer, provider postgresv1.PostgreSQLProviderSpec) error {
+	userName := []string{consumer.Spec.Consumer.Username}
+	switch provider.Type {
+	case "azure":
+		userName = strings.Split(consumer.Spec.Consumer.Username, "@")
 	}
-	defer db.Close()
 
-	_, err = db.Exec("DROP DATABASE " + consumer.Spec.Consumer.Database + ";")
-	if err != nil {
-		return err
-	}
-	// delete db user
-	_, err = db.Exec("DROP USER " + consumer.Spec.Consumer.Username + ";")
+	var dropUser string
+	dropUser = fmt.Sprintf("DROP USER %s;", userName[0])
+	_, err := db.Exec(dropUser)
 	if err != nil {
 		return err
 	}
@@ -336,8 +395,9 @@ func (r *PostgreSQLConsumerReconciler) getPostgresSQLProvider(provider *postgres
 			provider.Username = v.Spec.Username
 			provider.Password = v.Spec.Password
 			provider.Port = v.Spec.Port
-			provider.Name = v.Name
-			provider.Namespace = v.Namespace
+			provider.Name = v.ObjectMeta.Name
+			provider.Namespace = v.ObjectMeta.Namespace
+			provider.Type = v.Spec.Type
 		}
 	}
 	return nil
@@ -369,8 +429,9 @@ func (r *PostgreSQLConsumerReconciler) checkPostgresSQLProviders(provider *postg
 				Username:  v.Spec.Username,
 				Password:  v.Spec.Password,
 				Port:      v.Spec.Port,
-				Name:      v.Name,
-				Namespace: v.Namespace,
+				Name:      v.ObjectMeta.Name,
+				Namespace: v.ObjectMeta.Namespace,
+				Type:      v.Spec.Type,
 			}
 			currentUsage, err := getPostgresSQLUsage(mDBProvider, r.Log.WithValues("postgresqlconsumer", namespaceName))
 			if err != nil {
@@ -396,8 +457,9 @@ func (r *PostgreSQLConsumerReconciler) checkPostgresSQLProviders(provider *postg
 					provider.Username = v.Spec.Username
 					provider.Password = v.Spec.Password
 					provider.Port = v.Spec.Port
-					provider.Name = v.Name
-					provider.Namespace = v.Namespace
+					provider.Name = v.ObjectMeta.Name
+					provider.Namespace = v.ObjectMeta.Namespace
+					provider.Type = v.Spec.Type
 					return nil
 				}
 			}

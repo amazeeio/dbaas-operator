@@ -1,7 +1,9 @@
 version: '3.2'
 services:
-  local-dbaas-provider:
-    image: mariadb:10.4.12
+  local-dbaas-mariadb-provider:
+    build:
+      context: test-resources
+      dockerfile: Dockerfile.mariadb
     restart: always
     environment:
       MYSQL_DATABASE: 'db'
@@ -10,8 +12,10 @@ services:
       MYSQL_ROOT_PASSWORD: 'password'
     ports:
       - '33066:3306'
-  local-dbaas-provider-multi:
-    image: mariadb:10.4.12
+  local-dbaas-provider-mariadb-multi:
+    build:
+      context: test-resources
+      dockerfile: Dockerfile.mariadb
     restart: always
     environment:
       MYSQL_DATABASE: 'db'
@@ -25,3 +29,13 @@ services:
     environment:
       MYSQL_PWD: 'password'
     stdin_open: true
+  local-dbaas-psql-provider:
+    build:
+      context: test-resources
+      dockerfile: Dockerfile.postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: 'password'
+      POSTGRES_USER: 'postgres'
+    ports:
+      - '5432:5432'

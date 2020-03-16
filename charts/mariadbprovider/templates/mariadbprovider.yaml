@@ -12,4 +12,5 @@ spec:
   password: {{ $providerConfig.password | quote }}
   port: {{ $providerConfig.port | quote }}
   user: {{ $providerConfig.user | quote }}
+  type: {{ $providerConfig.type | quote }}
 {{- end }}

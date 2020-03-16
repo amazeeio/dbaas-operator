@@ -17,3 +17,13 @@ providers:
   #   password: password
   #   port: '3306'
   #   user: root
+
+  # development-azure:
+  #   environment: development
+  #   hostname: azure-hostname.172.17.0.1.nip.io
+  #   readReplicaHostnames:
+  #   - azure-hostname.172.17.0.1.nip.io
+  #   password: password
+  #   port: '3306'
+  #   user: root@azure-hostname
+  #   type: azure

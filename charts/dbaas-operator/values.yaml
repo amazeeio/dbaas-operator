@@ -6,7 +6,7 @@ replicaCount: 1
 
 image:
   repository: amazeeio/dbaas-operator
-  tag: testingv1
+  tag: v0.1.0
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []

@@ -3,9 +3,9 @@ entries:
   dbaas-operator:
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2020-04-21T22:08:56.544555-04:00"
+    created: "2020-04-21T22:19:26.266721-04:00"
     description: A Helm chart for dbaas-operator
-    digest: c29037fc960fd575e1922be4e3f7c89d86980d1f38204deeb8b35acca834c0a5
+    digest: 16294c3b156e3d6192f9205358bce552952c75b8d28b06d37fbc4804e960cd8d
     name: dbaas-operator
     type: application
     urls:
@@ -13,7 +13,7 @@ entries:
     version: 0.1.2
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2020-04-21T22:08:56.54416-04:00"
+    created: "2020-04-21T22:19:26.26631-04:00"
     description: A Helm chart for dbaas-operator
     digest: f0f32afe174f62ea1ba792d6a564223cd0ed6ac821bdf7a09cf5c254f02f2fac
     name: dbaas-operator
@@ -23,7 +23,7 @@ entries:
     version: 0.1.1
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2020-04-21T22:08:56.543777-04:00"
+    created: "2020-04-21T22:19:26.265664-04:00"
     description: A Helm chart for dbaas-operator
     digest: 49e3bac9fd6a6eea448accd9483d9fbacd3a3b0b3e2e146c7304b558438c0df2
     name: dbaas-operator
@@ -34,7 +34,7 @@ entries:
   mariadbprovider:
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2020-04-21T22:08:56.544908-04:00"
+    created: "2020-04-21T22:19:26.269908-04:00"
     description: A Helm chart for MariaDBProvider used by dbaas-operator
     digest: a59bd057c64ca68b2f52a8b1a6dece0746ebc0ee0f1a6a17c807c8df5d6a0c3e
     name: mariadbprovider
@@ -44,7 +44,7 @@ entries:
     version: 0.1.2
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2020-04-21T22:08:56.544735-04:00"
+    created: "2020-04-21T22:19:26.267162-04:00"
     description: A Helm chart for MariaDBProvider used by dbaas-operator
     digest: bc03d2aa3c0d0aba80063294dbf467cb79b32a408cb34dec1841b531ebd2094c
     name: mariadbprovider
@@ -52,4 +52,4 @@ entries:
     urls:
     - mariadbprovider-0.1.1.tgz
     version: 0.1.1
-generated: "2020-04-21T22:08:56.543054-04:00"
+generated: "2020-04-21T22:19:26.264732-04:00"

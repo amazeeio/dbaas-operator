@@ -53,3 +53,9 @@ kubectl proxy
 ## Config samples
 
 * located in `config/samples`
+
+# Update Helm Charts
+
+* Update Helmchart and increase version in `Chart.yaml`
+* run `helm package charts/dbaas-operator -d charts/` and `helm package charts/mariadbprovider -d charts/`
+* run `helm repo index charts`

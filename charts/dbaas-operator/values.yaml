@@ -9,6 +9,11 @@ image:
   tag: v0.1.0
   pullPolicy: IfNotPresent
 
+kube-rbac-proxy:
+  image:
+    repository:  gcr.io/kubebuilder/kube-rbac-proxy
+    tag: v0.4.1
+
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""

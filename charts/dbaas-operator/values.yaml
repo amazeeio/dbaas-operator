@@ -6,8 +6,13 @@ replicaCount: 1
 
 image:
   repository: amazeeio/dbaas-operator
-  tag: testingv1
+  tag: v0.1.1
   pullPolicy: IfNotPresent
+
+kubeRbacProxy:
+  image:
+    repository:  gcr.io/kubebuilder/kube-rbac-proxy
+    tag: v0.4.1
 
 imagePullSecrets: []
 nameOverride: ""

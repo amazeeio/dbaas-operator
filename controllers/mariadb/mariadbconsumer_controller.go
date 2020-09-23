@@ -284,7 +284,12 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 	}
 	opLog.Info(fmt.Sprintf("Dropping database %s on host %s - %s/%s", mariaDBConsumer.Spec.Consumer.Database, provider.Hostname, provider.Namespace, provider.Name))
 	if err := dropDbAndUser(*provider, *mariaDBConsumer); err != nil {
-		return err
+		// If the database doesn't exist, then we can still continue deprovisioning.
+		if strings.Contains(err.Error(), "database doesn't exist") {
+			opLog.Info(fmt.Sprintf("Error dropping database: %v, continuing with deprovisioning.", err))
+		} else {
+			return err
+		}
 	}
 	// Delete the primary
 	service := &corev1.Service{

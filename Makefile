@@ -87,3 +87,6 @@ operator-test:
 clean:
 	docker-compose down
 	kind delete cluster --name ${KIND_NAME}
+
+local-circle:
+	circleci build -v $(shell pwd):/workdir

@@ -8,3 +8,4 @@ resources:
   kind: MariaDBProvider
   version: v1
 version: "2"
+multigroup: true

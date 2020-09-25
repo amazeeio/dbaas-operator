@@ -1,0 +1,11 @@
+apiVersion: postgres.amazee.io/v1
+kind: PostgreSQLProvider
+metadata:
+  name: postgreprovider-testing
+spec:
+  environment: test
+  hostname: postgres.172.17.0.1.nip.io
+  password: password
+  port: '5432'
+  user: postgres
+

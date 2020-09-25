@@ -58,3 +58,43 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - postgres.amazee.io
+  resources:
+  - postgresqlconsumers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - postgres.amazee.io
+  resources:
+  - postgresqlconsumers/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - postgres.amazee.io
+  resources:
+  - postgresqlproviders
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - postgres.amazee.io
+  resources:
+  - postgresqlproviders/status
+  verbs:
+  - get
+  - patch
+  - update

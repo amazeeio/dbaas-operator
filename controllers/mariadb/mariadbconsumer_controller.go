@@ -32,7 +32,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	mariadbv1 "github.com/amazeeio/dbaas-operator/api/v1"
+	mariadbv1 "github.com/amazeeio/dbaas-operator/apis/mariadb/v1"
 
 	"database/sql"
 

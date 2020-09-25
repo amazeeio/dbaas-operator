@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
@@ -331,14 +332,15 @@ func truncateString(str string, num int) string {
 
 var alphaNumeric = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
 var dnsCompliantAlphaNumeric = []rune("abcdefghijklmnopqrstuvwxyz1234567890")
+var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 func randSeq(n int, dns bool) string {
 	b := make([]rune, n)
 	for i := range b {
 		if dns {
-			b[i] = dnsCompliantAlphaNumeric[rand.Intn(len(dnsCompliantAlphaNumeric))]
+			b[i] = dnsCompliantAlphaNumeric[seededRand.Intn(len(dnsCompliantAlphaNumeric))]
 		} else {
-			b[i] = alphaNumeric[rand.Intn(len(alphaNumeric))]
+			b[i] = alphaNumeric[seededRand.Intn(len(alphaNumeric))]
 		}
 	}
 	return string(b)

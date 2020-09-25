@@ -1,0 +1,14 @@
+{{- range $providerName, $providerConfig := .Values.providers }}
+---
+apiVersion: postgres.amazee.io/v1
+kind: PostgreSQLProvider
+metadata:
+  name: {{ $providerName }}
+spec:
+  environment: {{ $providerConfig.environment | quote }}
+  hostname:  {{ $providerConfig.hostname | quote }}
+  password: {{ $providerConfig.password | quote }}
+  port: {{ $providerConfig.port | quote }}
+  user: {{ $providerConfig.user | quote }}
+  type: {{ $providerConfig.type | quote }}
+{{- end }}

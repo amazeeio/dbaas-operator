@@ -303,14 +303,14 @@ func createDatabaseIfNotExist(provider postgresv1.PostgreSQLProviderSpec, consum
 		userName = strings.Split(consumer.Spec.Consumer.Username, "@")
 	}
 	// @TODO: check the equivalent of of create if not exists
-	createDB := fmt.Sprintf("CREATE DATABASE %s;", consumer.Spec.Consumer.Database)
+	createDB := fmt.Sprintf("CREATE DATABASE \"%s\";", consumer.Spec.Consumer.Database)
 	_, err = db.Exec(createDB)
 	if err != nil {
 		return err
 	}
 	// @TODO: check the equivalent of of create if not exists
 	var createUser string
-	createUser = fmt.Sprintf("CREATE USER %s WITH ENCRYPTED PASSWORD '%s';", userName[0], consumer.Spec.Consumer.Password)
+	createUser = fmt.Sprintf("CREATE USER \"%s\" WITH ENCRYPTED PASSWORD '%s';", userName[0], consumer.Spec.Consumer.Password)
 	_, err = db.Exec(createUser)
 	if err != nil {
 		// if user creation fails, drop the database that gets created
@@ -321,7 +321,7 @@ func createDatabaseIfNotExist(provider postgresv1.PostgreSQLProviderSpec, consum
 		return fmt.Errorf("Unable to create user %s, dropped database %s: %v", consumer.Spec.Consumer.Username, consumer.Spec.Consumer.Database, err)
 	}
 	var grantUser string
-	grantUser = fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE %s TO %s;", consumer.Spec.Consumer.Database, userName[0])
+	grantUser = fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE \"%s\" TO \"%s\";", consumer.Spec.Consumer.Database, userName[0])
 	_, err = db.Exec(grantUser)
 	if err != nil {
 		// if grants fails, drop the database and user that gets created
@@ -359,7 +359,7 @@ func dropDbAndUser(provider postgresv1.PostgreSQLProviderSpec, consumer postgres
 }
 
 func dropDatabase(db *sql.DB, database string) error {
-	dropDB := fmt.Sprintf("DROP DATABASE %s;", database)
+	dropDB := fmt.Sprintf("DROP DATABASE \"%s\";", database)
 	_, err := db.Exec(dropDB)
 	if err != nil {
 		return err
@@ -375,7 +375,7 @@ func dropUser(db *sql.DB, consumer postgresv1.PostgreSQLConsumer, provider postg
 	}
 
 	var dropUser string
-	dropUser = fmt.Sprintf("DROP USER %s;", userName[0])
+	dropUser = fmt.Sprintf("DROP USER \"%s\";", userName[0])
 	_, err := db.Exec(dropUser)
 	if err != nil {
 		return err

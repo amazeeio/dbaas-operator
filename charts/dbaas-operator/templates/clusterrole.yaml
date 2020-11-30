@@ -139,6 +139,7 @@ rules:
 - apiGroups: ["mariadb.amazee.io"]
   resources: ["mariadbproviders"]
   verbs: ["*"]
+---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:

@@ -38,6 +38,10 @@ spec:
               type: string
             hostname:
               type: string
+            name:
+              type: string
+            namespace:
+              type: string
             password:
               type: string
             port:
@@ -46,6 +50,8 @@ spec:
               items:
                 type: string
               type: array
+            type:
+              type: string
             user:
               type: string
           type: object

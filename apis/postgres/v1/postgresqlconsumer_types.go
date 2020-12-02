@@ -52,6 +52,7 @@ type PostgreSQLConsumerProvider struct {
 	Namespace string `json:"namespace,omitempty"`
 	Hostname  string `json:"hostname,omitempty"`
 	Port      string `json:"port,omitempty"`
+	Type      string `json:"type,omitempty"`
 }
 
 // PostgreSQLConsumerStatus defines the observed state of PostgreSQLConsumer

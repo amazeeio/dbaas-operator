@@ -34,6 +34,12 @@ case $1 in
     helm repo index .
     popd
     ;;
+  index-mongo)
+    pushd charts
+    helm package mongodbprovider
+    helm repo index .
+    popd
+    ;;
   template)
     helm template charts/dbaas-operator -f charts/dbaas-operator/values.yaml
     ;;

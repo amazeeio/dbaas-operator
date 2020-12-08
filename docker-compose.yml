@@ -39,3 +39,13 @@ services:
       POSTGRES_USER: 'postgres'
     ports:
       - '5432:5432'
+  local-dbaas-mongo-provider:
+    build:
+      context: test-resources
+      dockerfile: Dockerfile.mongo
+    restart: always
+    ports:
+      - '27017:27017'
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: 'root'
+      MONGO_INITDB_ROOT_PASSWORD: 'password'

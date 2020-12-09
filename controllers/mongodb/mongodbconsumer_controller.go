@@ -55,6 +55,7 @@ type MongoDBProviderInfo struct {
 	Name      string
 	Namespace string
 	Auth      MongoDBAuth
+	Type      string
 }
 
 // MongoDBAuth .
@@ -480,6 +481,7 @@ func (r *MongoDBConsumerReconciler) checkMongoDBProviders(provider *MongoDBProvi
 					provider.Name = v.Name
 					provider.Namespace = v.Namespace
 					provider.Auth.Mechanism = v.Spec.Auth.Mechanism
+					provider.Type = v.Spec.Type
 					return nil
 				}
 			}

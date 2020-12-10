@@ -14,5 +14,5 @@ spec:
   auth:
     mechanism: {{ $providerConfig.auth.mechanism | quote }}
     source: {{ $providerConfig.auth.source | quote }}
-    tls: {{ $providerConfig.auth.tls | quote | default false }}
+    tls: {{ $providerConfig.auth.tls | default false }}
 {{- end }}

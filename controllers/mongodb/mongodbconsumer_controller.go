@@ -17,9 +17,11 @@ package controllers
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"math/rand"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
@@ -37,6 +39,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 // MongoDBConsumerReconciler reconciles a MongoDBConsumer object
@@ -54,14 +57,8 @@ type MongoDBProviderInfo struct {
 	Port      string
 	Name      string
 	Namespace string
-	Auth      MongoDBAuth
+	Auth      mongodbv1.MongoDBAuth
 	Type      string
-}
-
-// MongoDBAuth .
-type MongoDBAuth struct {
-	Mechanism string
-	Source    string
 }
 
 // MongoDBConsumerInfo .
@@ -69,6 +66,7 @@ type MongoDBConsumerInfo struct {
 	DatabaseName string
 	Username     string
 	Password     string
+	Auth         mongodbv1.MongoDBAuth
 }
 
 // MongoDBUsage .
@@ -161,6 +159,7 @@ func (r *MongoDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 			if mongodbConsumer.Spec.Provider.Namespace == "" {
 				mongodbConsumer.Spec.Provider.Namespace = provider.Namespace
 			}
+			mongodbConsumer.Spec.Provider.Auth = provider.Auth
 		}
 
 		// check if service exists, get if it does, create otherwise
@@ -175,7 +174,7 @@ func (r *MongoDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 				Type:         corev1.ServiceTypeExternalName,
 			},
 		}
-		err := r.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: service.ObjectMeta.Name}, service)
+		err := r.Get(context.Background(), types.NamespacedName{Namespace: req.Namespace, Name: service.ObjectMeta.Name}, service)
 		if err != nil {
 			opLog.Info(fmt.Sprintf("Creating service %s in namespace %s", mongodbConsumer.Spec.Consumer.Services.Primary, mongodbConsumer.ObjectMeta.Namespace))
 			if err := r.Create(context.Background(), service); err != nil {
@@ -254,7 +253,7 @@ func (r *MongoDBConsumerReconciler) deleteExternalResources(mongodbConsumer *mon
 		},
 	}
 	opLog.Info(fmt.Sprintf("Deleting service %s in namespace %s", service.ObjectMeta.Name, service.ObjectMeta.Namespace))
-	if err := r.Delete(context.TODO(), service); ignoreNotFound(err) != nil {
+	if err := r.Delete(context.Background(), service); ignoreNotFound(err) != nil {
 		return err
 	}
 	return nil
@@ -273,14 +272,15 @@ func truncateString(str string, num int) string {
 
 var alphaNumeric = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
 var dnsCompliantAlphaNumeric = []rune("abcdefghijklmnopqrstuvwxyz1234567890")
+var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 func randSeq(n int, dns bool) string {
 	b := make([]rune, n)
 	for i := range b {
 		if dns {
-			b[i] = dnsCompliantAlphaNumeric[rand.Intn(len(dnsCompliantAlphaNumeric))]
+			b[i] = dnsCompliantAlphaNumeric[seededRand.Intn(len(dnsCompliantAlphaNumeric))]
 		} else {
-			b[i] = alphaNumeric[rand.Intn(len(alphaNumeric))]
+			b[i] = alphaNumeric[seededRand.Intn(len(alphaNumeric))]
 		}
 	}
 	return string(b)
@@ -320,38 +320,58 @@ func createDatabaseIfNotExist(provider MongoDBProviderInfo, consumer MongoDBCons
 		Password:      provider.Password,
 		AuthSource:    provider.Auth.Source,
 	}
-	clientOptions := options.Client().ApplyURI("mongodb://172.17.0.1.xip.io:27017/admin").SetAuth(credential)
+	// support tls connections to a mongodb
+	clientOptions := options.Client().
+		SetAuth(credential)
+	connURL := fmt.Sprintf("mongodb://%s:%s/", provider.Hostname, provider.Port)
+	if provider.Auth.TLS {
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: true,
+		}
+		// connURL = fmt.Sprintf("mongodb://%s:%s/", provider.Hostname, provider.Port)
+		connURL = fmt.Sprintf("mongodb://%s:%s/?sslInsecure=true", provider.Hostname, provider.Port)
+		clientOptions.SetTLSConfig(tlsConfig)
+	}
 
 	// Connect to MongoDB
-	client, err := mongo.Connect(context.TODO(), clientOptions)
+	client, err := mongo.Connect(context.Background(), options.MergeClientOptions(options.Client().ApplyURI(connURL), clientOptions))
 	if err != nil {
-		return err
+		return fmt.Errorf("Error creating client: %v", err)
 	}
 
 	// Check the connection
-	err = client.Ping(context.TODO(), nil)
+	err = client.Ping(context.Background(), readpref.Primary())
 	if err != nil {
-		return err
+		return fmt.Errorf("Error pinging server: %v", err)
 	}
 
 	// create the user
 	lagoonDB := client.Database(consumer.DatabaseName)
-	err = lagoonDB.RunCommand(context.TODO(), bson.D{{Key: "createUser", Value: consumer.Username}, {Key: "pwd", Value: consumer.Password}, {Key: "roles", Value: bson.A{bson.D{primitive.E{Key: "role", Value: "readWrite"}, {Key: "db", Value: consumer.DatabaseName}}}}}).Err()
+	err = lagoonDB.RunCommand(
+		context.Background(),
+		bson.D{
+			{Key: "createUser", Value: consumer.Username},
+			{Key: "pwd", Value: consumer.Password},
+			{Key: "roles", Value: bson.A{bson.D{primitive.E{
+				Key: "role", Value: "readWrite"},
+				{Key: "db", Value: consumer.DatabaseName}}},
+			},
+		}).Err()
 	if err != nil {
-		return err
+		return fmt.Errorf("Error running user creation: %v", err)
 	}
 	// create a lagoon collection in the database (to create the database)
 	lagoonCollection := client.Database(consumer.DatabaseName).Collection("lagoon")
-	_, err = lagoonCollection.InsertOne(context.TODO(), bson.M{"name": "Lagoon"})
+	_, err = lagoonCollection.InsertOne(context.Background(), bson.M{"name": "Lagoon"})
 	if err != nil {
-		return err
+		return fmt.Errorf("Error inserting database: %v", err)
 	}
 
 	// Close the connection once no longer needed
-	err = client.Disconnect(context.TODO())
+	err = client.Disconnect(context.Background())
 
 	if err != nil {
-		return err
+		return fmt.Errorf("Error disconnecting: %v", err)
 	}
 	// disconnected from mongo
 	return nil
@@ -365,37 +385,53 @@ func dropDatabase(provider MongoDBProviderInfo, consumer MongoDBConsumerInfo) er
 		Password:      provider.Password,
 		AuthSource:    provider.Auth.Source,
 	}
-	clientOptions := options.Client().ApplyURI("mongodb://" + provider.Hostname + ":" + provider.Port + "/admin").SetAuth(credential)
+	// support tls connections to a mongodb
+	clientOptions := options.Client().
+		SetAuth(credential)
+	connURL := fmt.Sprintf("mongodb://%s:%s/", provider.Hostname, provider.Port)
+	if provider.Auth.TLS {
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: true,
+		}
+		// connURL = fmt.Sprintf("mongodb://%s:%s/", provider.Hostname, provider.Port)
+		connURL = fmt.Sprintf("mongodb://%s:%s/?sslInsecure=true", provider.Hostname, provider.Port)
+		clientOptions.SetTLSConfig(tlsConfig)
+	}
 
 	// Connect to MongoDB
-	client, err := mongo.Connect(context.TODO(), clientOptions)
+	client, err := mongo.Connect(context.Background(), options.MergeClientOptions(options.Client().ApplyURI(connURL), clientOptions))
 	if err != nil {
-		return err
+		return fmt.Errorf("Error creating client: %v", err)
 	}
 
 	// Check the connection
-	err = client.Ping(context.TODO(), nil)
+	err = client.Ping(context.Background(), readpref.Primary())
 	if err != nil {
-		return err
+		return fmt.Errorf("Error pinging server: %v", err)
 	}
 
 	// drop the user
 	lagoonDB := client.Database(consumer.DatabaseName)
-	_ = lagoonDB.RunCommand(
-		context.TODO(),
-		bson.D{{Key: "dropUser", Value: consumer.Username}},
-	)
-	// drop the database
-	err = client.Database(consumer.DatabaseName).Drop(context.TODO())
+	err = lagoonDB.RunCommand(
+		context.Background(),
+		bson.D{
+			{Key: "dropUser", Value: consumer.Username},
+		},
+	).Err()
 	if err != nil {
-		return err
+		return fmt.Errorf("Error dropping user: %v", err)
+	}
+	// drop the database
+	err = client.Database(consumer.DatabaseName).Drop(context.Background())
+	if err != nil {
+		return fmt.Errorf("Error dropping database: %v", err)
 	}
 
 	// Close the connection once no longer needed
-	err = client.Disconnect(context.TODO())
+	err = client.Disconnect(context.Background())
 
 	if err != nil {
-		return err
+		return fmt.Errorf("Error disconnecting: %v", err)
 	}
 	// disconnected from mongo
 	return nil
@@ -405,7 +441,7 @@ func dropDatabase(provider MongoDBProviderInfo, consumer MongoDBConsumerInfo) er
 func (r *MongoDBConsumerReconciler) getMongoDBProvider(provider *MongoDBProviderInfo, mongoDBConsumer *mongodbv1.MongoDBConsumer) error {
 	providers := &mongodbv1.MongoDBProviderList{}
 	src := providers.DeepCopyObject()
-	if err := r.List(context.TODO(), src.(*mongodbv1.MongoDBProviderList)); err != nil {
+	if err := r.List(context.Background(), src.(*mongodbv1.MongoDBProviderList)); err != nil {
 		return err
 	}
 	providersList := src.(*mongodbv1.MongoDBProviderList)
@@ -417,6 +453,8 @@ func (r *MongoDBConsumerReconciler) getMongoDBProvider(provider *MongoDBProvider
 			provider.Port = v.Spec.Port
 			provider.Name = v.Name
 			provider.Namespace = v.Namespace
+			provider.Type = v.Spec.Type
+			provider.Auth = v.Spec.Auth
 		}
 	}
 	return nil
@@ -427,7 +465,7 @@ func (r *MongoDBConsumerReconciler) checkMongoDBProviders(provider *MongoDBProvi
 	opLog := r.Log.WithValues("mongodbconsumer", namespaceName)
 	providers := &mongodbv1.MongoDBProviderList{}
 	src := providers.DeepCopyObject()
-	if err := r.List(context.TODO(), src.(*mongodbv1.MongoDBProviderList)); err != nil {
+	if err := r.List(context.Background(), src.(*mongodbv1.MongoDBProviderList)); err != nil {
 		return err
 	}
 	providersList := src.(*mongodbv1.MongoDBProviderList)
@@ -450,9 +488,7 @@ func (r *MongoDBConsumerReconciler) checkMongoDBProviders(provider *MongoDBProvi
 				Port:      v.Spec.Port,
 				Name:      v.Name,
 				Namespace: v.Namespace,
-				Auth: MongoDBAuth{
-					Mechanism: v.Spec.Auth.Mechanism,
-				},
+				Auth:      v.Spec.Auth,
 			}
 			currentUsage, err := getMongoDBUsage(mDBProvider, r.Log.WithValues("mongodbconsumer", namespaceName))
 			if err != nil {
@@ -480,8 +516,8 @@ func (r *MongoDBConsumerReconciler) checkMongoDBProviders(provider *MongoDBProvi
 					provider.Port = v.Spec.Port
 					provider.Name = v.Name
 					provider.Namespace = v.Namespace
-					provider.Auth.Mechanism = v.Spec.Auth.Mechanism
 					provider.Type = v.Spec.Type
+					provider.Auth = v.Spec.Auth
 					return nil
 				}
 			}

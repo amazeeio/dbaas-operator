@@ -38,6 +38,19 @@ spec:
               description: MongoDBConsumerData defines the provider link for this
                 consumer
               properties:
+                auth:
+                  description: MongoDBAuth defines the authorisation mechanisms that
+                    mongo can use
+                  properties:
+                    mechanism:
+                      type: string
+                    source:
+                      type: string
+                    tls:
+                      type: boolean
+                  required:
+                  - tls
+                  type: object
                 database:
                   type: string
                 password:
@@ -59,6 +72,19 @@ spec:
               description: MongoDBConsumerProvider defines the provider link for this
                 consumer
               properties:
+                auth:
+                  description: MongoDBAuth defines the authorisation mechanisms that
+                    mongo can use
+                  properties:
+                    mechanism:
+                      type: string
+                    source:
+                      type: string
+                    tls:
+                      type: boolean
+                  required:
+                  - tls
+                  type: object
                 hostname:
                   type: string
                 name:

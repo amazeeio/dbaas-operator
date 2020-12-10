@@ -78,6 +78,22 @@ mongodb_start_check () {
   done
 }
 
+
+
+mongodb_tls_start_check () {
+  until $(docker run -it ${MONGODB_VERSION} mongo --tls --tlsAllowInvalidCertificates --tlsAllowInvalidHostnames mongodb://root:password@mongodb.172.17.0.1.nip.io:27018/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q admin)
+  do
+  if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
+    let CHECK_COUNTER=CHECK_COUNTER+1
+    echo "Database provider not running yet"
+    sleep 5
+  else
+    echo "Timeout of $CHECK_TIMEOUT for database provider startup reached"
+    exit 1
+  fi
+  done
+}
+
 tear_down () {
   echo -e "${GREEN}============= TEAR DOWN =============${NOCOLOR}"
   kind delete cluster --name ${KIND_NAME}
@@ -91,10 +107,15 @@ start_up () {
   CHECK_COUNTER=1
   echo -e "${GREEN}==> Ensure mariadb database providers are running${NOCOLOR}"
   mariadb_start_check
+  CHECK_COUNTER=1
   echo -e "${LIGHTBLUE}==> Ensure postgres database provider is running${NOCOLOR}"
   postgres_start_check
+  CHECK_COUNTER=1
   echo -e "${MAGENTA}==> Ensure mongodb database provider is running${NOCOLOR}"
   mongodb_start_check
+  CHECK_COUNTER=1
+  echo -e "${MAGENTA}==> Ensure mongodb tls database provider is running${NOCOLOR}"
+  mongodb_tls_start_check
 }
 
 start_kind () {
@@ -272,6 +293,7 @@ add_delete_consumer_mongodb () {
   else
     echo "Timeout of $CHECK_TIMEOUT for database creation reached"
     check_operator_log
+    docker-compose logs local-dbaas-mongo-provider
     exit 1
   fi
   done
@@ -301,6 +323,58 @@ add_delete_consumer_mongodb () {
   fi
   echo "==> Check if the operator deletes the database"
   if docker run -it ${MONGODB_VERSION} mongo mongodb://root:password@mongodb.172.17.0.1.nip.io:27017/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
+  then 
+    echo "database ${DB_NAME} exists"
+    check_operator_log
+    exit 1
+  else 
+    echo "database ${DB_NAME} does not exist"
+  fi
+}
+
+add_delete_consumer_mongodb_tls () {
+  echo "====> Add a consumer"
+  kubectl apply -f $1
+  CHECK_COUNTER=1
+  until kubectl get mongodbconsumer/$2 -o json | jq -e '.spec.consumer.database?'
+  do
+  if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
+    let CHECK_COUNTER=CHECK_COUNTER+1
+    echo "Database not created yet"
+    sleep 5
+  else
+    echo "Timeout of $CHECK_TIMEOUT for database creation reached"
+    check_operator_log
+    docker-compose logs local-dbaas-mongo-tls-provider
+    exit 1
+  fi
+  done
+  echo "====> Get MongoDBConsumer"
+  kubectl get mongodbconsumer/$2 -o yaml
+  DB_NAME=$(kubectl get mongodbconsumer/$2 -o json | jq -r '.spec.consumer.database')
+  echo "==> Check if the operator creates the database"
+  if docker run -it ${MONGODB_VERSION} mongo --tls --tlsAllowInvalidCertificates --tlsAllowInvalidHostnames mongodb://root:password@mongodb.172.17.0.1.nip.io:27018/ --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
+  then 
+    echo "database ${DB_NAME} exists"
+  else 
+    echo "database ${DB_NAME} does not exist"
+    check_operator_log
+    exit 1
+  fi
+
+  echo "==> Check services"
+  check_services $2 mongodbconsumer
+
+  echo "==> Delete the consumer"
+  timeout 60 kubectl delete -f $1
+  if [ $? -ne 0 ]
+  then
+    echo "failed to delete consumer"
+    check_operator_log
+    exit 1
+  fi
+  echo "==> Check if the operator deletes the database"
+  if docker run -it ${MONGODB_VERSION} mongo --tls --tlsAllowInvalidCertificates --tlsAllowInvalidHostnames mongodb://root:password@mongodb.172.17.0.1.nip.io:27018/ --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
   then 
     echo "database ${DB_NAME} exists"
     check_operator_log
@@ -430,6 +504,16 @@ echo -e "${GREEN}====>${MAGENTA}MongoDB: ${NOCOLOR} Test blank consumer"
 add_delete_consumer_mongodb test-resources/mongodb/consumer.yaml mongodbconsumer-testing
 echo -e "${YELLOW}====>${MAGENTA}MongoDB: ${NOCOLOR} Blank consumer logs"
 check_operator_log | grep mongodbconsumer-testing
+
+echo -e "${GREEN}==>${MAGENTA}MongoDB: ${NOCOLOR} Test MongoDB TLS"
+echo -e "${GREEN}====>${MAGENTA}MongoDB: ${NOCOLOR} Add a TLS provider"
+kubectl apply -f test-resources/mongodb/provider-tls.yaml
+kubectl get mongodbprovider/mongodbprovider-tls-testing -o yaml
+
+echo -e "${GREEN}====>${MAGENTA}MongoDB: ${NOCOLOR} Test blank TLS consumer"
+add_delete_consumer_mongodb_tls test-resources/mongodb/consumer-tls.yaml mongodbconsumer-tls-testing
+echo -e "${YELLOW}====>${MAGENTA}MongoDB: ${NOCOLOR} Blank TLS consumer logs"
+check_operator_log | grep mongodbconsumer-tls-testing
 
 echo ""; echo ""
 tear_down

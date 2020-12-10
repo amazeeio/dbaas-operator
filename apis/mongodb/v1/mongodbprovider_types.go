@@ -41,6 +41,7 @@ type MongoDBProviderSpec struct {
 type MongoDBAuth struct {
 	Mechanism string `json:"mechanism,omitempty"`
 	Source    string `json:"source,omitempty"`
+	TLS       bool   `json:"tls"`
 }
 
 // MongoDBProviderStatus defines the observed state of MongoDBProvider

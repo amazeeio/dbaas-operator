@@ -39,6 +39,7 @@ type MongoDBConsumerData struct {
 	Password string                  `json:"password,omitempty"`
 	Username string                  `json:"username,omitempty"`
 	Services MongoDBConsumerServices `json:"services,omitempty"`
+	Auth     MongoDBAuth             `json:"auth,omitempty"`
 }
 
 // MongoDBConsumerServices defines the provider link for this consumer
@@ -48,10 +49,11 @@ type MongoDBConsumerServices struct {
 
 // MongoDBConsumerProvider defines the provider link for this consumer
 type MongoDBConsumerProvider struct {
-	Name      string `json:"name,omitempty"`
-	Namespace string `json:"namespace,omitempty"`
-	Hostname  string `json:"hostname,omitempty"`
-	Port      string `json:"port,omitempty"`
+	Name      string      `json:"name,omitempty"`
+	Namespace string      `json:"namespace,omitempty"`
+	Hostname  string      `json:"hostname,omitempty"`
+	Port      string      `json:"port,omitempty"`
+	Auth      MongoDBAuth `json:"auth,omitempty"`
 }
 
 // MongoDBConsumerStatus defines the observed state of MongoDBConsumer

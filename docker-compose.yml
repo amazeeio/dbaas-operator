@@ -49,3 +49,13 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: 'root'
       MONGO_INITDB_ROOT_PASSWORD: 'password'
+  local-dbaas-mongo-tls-provider:
+    build:
+      context: test-resources
+      dockerfile: Dockerfile.mongotls
+    restart: always
+    ports:
+      - '27018:27017'
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: 'root'
+      MONGO_INITDB_ROOT_PASSWORD: 'password'

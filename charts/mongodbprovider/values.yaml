@@ -9,6 +9,7 @@ providers:
   #   auth:
   #     mechanism: SCRAM-SHA-1
   #     source: admin
+  #     tls: false
 
   # development:
   #   environment: development
@@ -19,3 +20,4 @@ providers:
   #   auth:
   #     mechanism: SCRAM-SHA-1
   #     source: admin
+  #     tls: false

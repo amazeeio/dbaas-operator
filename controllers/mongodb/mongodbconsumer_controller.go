@@ -145,6 +145,7 @@ func (r *MongoDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 			if err := createDatabaseIfNotExist(*provider, consumer); err != nil {
 				return ctrl.Result{}, err
 			}
+			mongodbConsumer.Spec.Consumer.Auth = provider.Auth
 
 			// populate with provider host information. we don't expose provider credentials here
 			if mongodbConsumer.Spec.Provider.Hostname == "" {

@@ -109,15 +109,15 @@ func (r *MongoDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if mongodbConsumer.ObjectMeta.DeletionTimestamp.IsZero() {
-		// set up the new credentials
+		// set up the new credentials, use shorter names for database and username
 		if mongodbConsumer.Spec.Consumer.Database == "" {
-			mongodbConsumer.Spec.Consumer.Database = truncateString(req.NamespacedName.Namespace, 50) + "_" + randSeq(5, false)
+			mongodbConsumer.Spec.Consumer.Database = truncateString(req.NamespacedName.Namespace, 15) + "_" + randSeq(5, false)
 		}
 		if mongodbConsumer.Spec.Consumer.Username == "" {
-			mongodbConsumer.Spec.Consumer.Username = truncateString(req.NamespacedName.Namespace, 10) + "_" + randSeq(5, false)
+			mongodbConsumer.Spec.Consumer.Username = truncateString(req.NamespacedName.Namespace, 15) + "_" + randSeq(5, false)
 		}
 		if mongodbConsumer.Spec.Consumer.Password == "" {
-			mongodbConsumer.Spec.Consumer.Password = randSeq(24, false)
+			mongodbConsumer.Spec.Consumer.Password = randSeq(20, false)
 		}
 		if mongodbConsumer.Spec.Consumer.Services.Primary == "" {
 			mongodbConsumer.Spec.Consumer.Services.Primary = truncateString(req.Name, 25) + "-" + uuid.New().String()

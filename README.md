@@ -18,7 +18,7 @@ It allows for provisiong and deprovisioning of shared MySQL/MariaDB, PostgreSQL,
 * MongoDBConsumer - These contain the specific connection details for a consumer, multiple consumers can be defined in the one namespace and each will get their own specific service endpoints created pointing to the provider.
 
 ## Test It Out
-This will spin up a local mysql provider, and then start kind and installs the operator and runs some basic tests to confirm the operation of the operator
+This will spin up a local mysql, postgresql, and mongodb provider. A kind cluster is started, and the operator is installed, then some basic tests are performed to confirm the providers and consumer provisioning and deprovisioning is successful.
 
 ### Using circleci locally
 Install the `circleci` tool locally and run the following

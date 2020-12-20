@@ -97,7 +97,7 @@ func (r *PostgreSQLConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result,
 			postgresqlConsumer.Spec.Consumer.Password = randSeq(24, false)
 		}
 		if postgresqlConsumer.Spec.Consumer.Services.Primary == "" {
-			postgresqlConsumer.Spec.Consumer.Services.Primary = truncateString(req.Name, 27) + "-" + uuid.New().String()
+			postgresqlConsumer.Spec.Consumer.Services.Primary = truncateString(req.Name, 25) + "-" + uuid.New().String()
 		}
 
 		provider := &postgresv1.PostgreSQLProviderSpec{}

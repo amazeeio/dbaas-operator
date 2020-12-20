@@ -1,0 +1,23 @@
+providers:
+
+  # production:
+  #   environment: production
+  #   hostname: 172.17.0.1.nip.io
+  #   password: password
+  #   port: '3306'
+  #   user: root
+  #   auth:
+  #     mechanism: SCRAM-SHA-1
+  #     source: admin
+  #     tls: false
+
+  # development:
+  #   environment: development
+  #   hostname: 172.17.0.1.nip.io
+  #   password: password
+  #   port: '3306'
+  #   user: root
+  #   auth:
+  #     mechanism: SCRAM-SHA-1
+  #     source: admin
+  #     tls: false

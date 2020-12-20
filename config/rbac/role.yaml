@@ -59,6 +59,46 @@ rules:
   - patch
   - update
 - apiGroups:
+  - mongodb.amazee.io
+  resources:
+  - mongodbconsumers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - mongodb.amazee.io
+  resources:
+  - mongodbconsumers/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - mongodb.amazee.io
+  resources:
+  - mongodbproviders
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - mongodb.amazee.io
+  resources:
+  - mongodbproviders/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - postgres.amazee.io
   resources:
   - postgresqlconsumers

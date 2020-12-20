@@ -20,8 +20,10 @@ import (
 	"os"
 
 	mariadbv1 "github.com/amazeeio/dbaas-operator/apis/mariadb/v1"
+	mongodbv1 "github.com/amazeeio/dbaas-operator/apis/mongodb/v1"
 	postgresv1 "github.com/amazeeio/dbaas-operator/apis/postgres/v1"
 	mariadbcontroller "github.com/amazeeio/dbaas-operator/controllers/mariadb"
+	mongodbcontroller "github.com/amazeeio/dbaas-operator/controllers/mongodb"
 	postgrescontroller "github.com/amazeeio/dbaas-operator/controllers/postgres"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -41,6 +43,7 @@ func init() {
 
 	_ = mariadbv1.AddToScheme(scheme)
 	_ = postgresv1.AddToScheme(scheme)
+	_ = mongodbv1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -98,6 +101,22 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PostgreSQLProvider")
+		os.Exit(1)
+	}
+	if err = (&mongodbcontroller.MongoDBConsumerReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("MongoDBConsumer"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "MongoDBConsumer")
+		os.Exit(1)
+	}
+	if err = (&mongodbcontroller.MongoDBProviderReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("MongoDBProvider"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "MongoDBProvider")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

@@ -1,0 +1,18 @@
+{{- range $providerName, $providerConfig := .Values.providers }}
+---
+apiVersion: mongodb.amazee.io/v1
+kind: MongoDBProvider
+metadata:
+  name: {{ $providerName }}
+spec:
+  environment: {{ $providerConfig.environment | quote }}
+  hostname:  {{ $providerConfig.hostname | quote }}
+  password: {{ $providerConfig.password | quote }}
+  port: {{ $providerConfig.port | quote }}
+  user: {{ $providerConfig.user | quote }}
+  type: {{ $providerConfig.type | quote | default "generic" }}
+  auth:
+    mechanism: {{ $providerConfig.auth.mechanism | quote }}
+    source: {{ $providerConfig.auth.source | quote }}
+    tls: {{ $providerConfig.auth.tls | default false }}
+{{- end }}

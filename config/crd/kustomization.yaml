@@ -6,6 +6,8 @@ resources:
 - bases/mariadb.amazee.io_mariadbproviders.yaml
 - bases/postgres.amazee.io_postgresqlconsumers.yaml
 - bases/postgres.amazee.io_postgresqlproviders.yaml
+- bases/mongodb.amazee.io_mongodbconsumers.yaml
+- bases/mongodb.amazee.io_mongodbproviders.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:

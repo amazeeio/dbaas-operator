@@ -381,9 +381,9 @@ func createDatabaseIfNotExist(provider mariadbv1.MariaDBProviderSpec, consumer m
 	case "azure":
 		userName := strings.Split(consumer.Spec.Consumer.Username, "@")
 		// hostName := strings.Split(provider.Hostname, ".")
-		grantUser = fmt.Sprintf("GRANT ALL ON `%s`.* TO `%s`@'%%';", consumer.Spec.Consumer.Database, userName[0])
+		grantUser = fmt.Sprintf("GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, REFERENCES, INDEX, ALTER, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, EVENT, TRIGGER ON `%s`.* TO `%s`@'%%';", consumer.Spec.Consumer.Database, userName[0])
 	default:
-		grantUser = fmt.Sprintf("GRANT ALL ON `%s`.* TO `%s`@'%%';", consumer.Spec.Consumer.Database, consumer.Spec.Consumer.Username)
+		grantUser = fmt.Sprintf("GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, REFERENCES, INDEX, ALTER, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, EVENT, TRIGGER ON `%s`.* TO `%s`@'%%';", consumer.Spec.Consumer.Database, consumer.Spec.Consumer.Username)
 	}
 	_, err = db.Exec(grantUser)
 	if err != nil {

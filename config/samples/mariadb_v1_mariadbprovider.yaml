@@ -44,3 +44,15 @@ spec:
 #   mariadb_password: myPassword
 #   mariadb_port: '3306'
 #   mariadb_user: root
+# ---
+# apiVersion: mariadb.amazee.io/v1
+# kind: MariaDBProvider
+# metadata:
+#   name: mariadbprovider-azure-production-1
+# spec:
+#   environment: production
+#   mariadb_hostname: mymariadb.mariadb.database.azure.com
+#   mariadb_readreplica_hostname:  mymariadb.mariadb.database.azure.com
+#   mariadb_password: myPassword
+#   mariadb_port: '3306'
+#   mariadb_user: root@mymariadb # azure expects to be connected via "user@host"

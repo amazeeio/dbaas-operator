@@ -26,7 +26,7 @@ check_operator_log () {
 }
 
 postgres_start_check () {
-  until $(docker run -it -e PGPASSWORD=password ${POSTGRES_VERSION} psql -h postgres.172.17.0.1.nip.io -p 5432 -U postgres postgres -c "SELECT datname FROM pg_database" | grep -q "postgres")
+  until $(docker-compose exec -T local-dbaas-psql-provider psql -h localhost -p 5432 -U postgres postgres -c "SELECT datname FROM pg_database" | grep -q "postgres")
   do
   if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
     let CHECK_COUNTER=CHECK_COUNTER+1
@@ -65,7 +65,7 @@ mariadb_start_check () {
 }
 
 mongodb_start_check () {
-  until $(docker run -it ${MONGODB_VERSION} mongo mongodb://root:password@mongodb.172.17.0.1.nip.io:27017/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q admin)
+  until $(docker-compose exec -T local-dbaas-mongo-provider mongo mongodb://root:password@mongodb.172.17.0.1.nip.io:27017/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q admin)
   do
   if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
     let CHECK_COUNTER=CHECK_COUNTER+1
@@ -81,7 +81,7 @@ mongodb_start_check () {
 
 
 mongodb_tls_start_check () {
-  until $(docker run -it ${MONGODB_VERSION} mongo --tls --tlsAllowInvalidCertificates --tlsAllowInvalidHostnames mongodb://root:password@mongodb.172.17.0.1.nip.io:27018/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q admin)
+  until $(docker-compose exec -T local-dbaas-mongo-tls-provider mongo --tls --tlsAllowInvalidCertificates --tlsAllowInvalidHostnames mongodb://root:password@mongodb.172.17.0.1.nip.io:27018/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q admin)
   do
   if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
     let CHECK_COUNTER=CHECK_COUNTER+1
@@ -256,7 +256,7 @@ add_delete_consumer_psql () {
   kubectl get postgresqlconsumer/$2 -o yaml
   DB_NAME=$(kubectl get postgresqlconsumer/$2 -o json | jq -r '.spec.consumer.database')
   echo -e "${GREEN}==>${NOCOLOR} Check if the operator creates the database"
-  DB_EXISTS=$(docker run -it -e PGPASSWORD=password ${POSTGRES_VERSION} psql -h postgres.172.17.0.1.nip.io -p 5432 -U postgres postgres --no-align --tuples-only -c "SELECT datname FROM pg_database;" | grep -q "${DB_NAME}")
+  DB_EXISTS=$(docker-compose exec -T local-dbaas-psql-provider psql -h localhost -p 5432 -U postgres postgres --no-align --tuples-only -c "SELECT datname FROM pg_database;" | grep -q "${DB_NAME}")
   if [[ -z "${DB_EXISTS}" ]]
   then 
     echo "database ${DB_NAME} exists"
@@ -280,7 +280,7 @@ add_delete_consumer_psql () {
     exit 1
   fi
   echo -e "${GREEN}==>${NOCOLOR} Check if the operator deletes the database"
-  DB_EXISTS=$(docker run -it -e PGPASSWORD=password ${POSTGRES_VERSION} psql -h postgres.172.17.0.1.nip.io -p 5432 -U postgres postgres --no-align --tuples-only -c "SELECT datname FROM pg_database;" | grep -q "${DB_NAME}")
+  DB_EXISTS=$(docker-compose exec -T local-dbaas-psql-provider psql -h localhost -p 5432 -U postgres postgres --no-align --tuples-only -c "SELECT datname FROM pg_database;" | grep -q "${DB_NAME}")
   if [[ ! -z "${DB_EXISTS}" ]]
   then 
     echo "database ${DB_NAME} exists"
@@ -334,7 +334,7 @@ add_delete_consumer_mongodb () {
   kubectl get mongodbconsumer/$2 -o yaml
   DB_NAME=$(kubectl get mongodbconsumer/$2 -o json | jq -r '.spec.consumer.database')
   echo "==> Check if the operator creates the database"
-  if docker run -it ${MONGODB_VERSION} mongo mongodb://root:password@mongodb.172.17.0.1.nip.io:27017/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
+  if docker-compose exec -T local-dbaas-mongo-provider mongo mongodb://root:password@mongodb.172.17.0.1.nip.io:27017/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
   then 
     echo "database ${DB_NAME} exists"
   else 
@@ -355,7 +355,7 @@ add_delete_consumer_mongodb () {
     exit 1
   fi
   echo "==> Check if the operator deletes the database"
-  if docker run -it ${MONGODB_VERSION} mongo mongodb://root:password@mongodb.172.17.0.1.nip.io:27017/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
+  if docker-compose exec -T local-dbaas-mongo-provider mongo mongodb://root:password@mongodb.172.17.0.1.nip.io:27017/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
   then 
     echo "database ${DB_NAME} exists"
     check_operator_log
@@ -407,7 +407,7 @@ add_delete_consumer_mongodb_tls () {
   kubectl get mongodbconsumer/$2 -o yaml
   DB_NAME=$(kubectl get mongodbconsumer/$2 -o json | jq -r '.spec.consumer.database')
   echo "==> Check if the operator creates the database"
-  if docker run -it ${MONGODB_VERSION} mongo --tls --tlsAllowInvalidCertificates --tlsAllowInvalidHostnames mongodb://root:password@mongodb.172.17.0.1.nip.io:27018/ --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
+  if docker-compose exec -T local-dbaas-mongo-tls-provider mongo --tls --tlsAllowInvalidCertificates --tlsAllowInvalidHostnames mongodb://root:password@mongodb.172.17.0.1.nip.io:27018/ --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
   then 
     echo "database ${DB_NAME} exists"
   else 
@@ -428,7 +428,7 @@ add_delete_consumer_mongodb_tls () {
     exit 1
   fi
   echo "==> Check if the operator deletes the database"
-  if docker run -it ${MONGODB_VERSION} mongo --tls --tlsAllowInvalidCertificates --tlsAllowInvalidHostnames mongodb://root:password@mongodb.172.17.0.1.nip.io:27018/ --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
+  if docker-compose exec -T local-dbaas-mongo-tls-provider mongo --tls --tlsAllowInvalidCertificates --tlsAllowInvalidHostnames mongodb://root:password@mongodb.172.17.0.1.nip.io:27018/ --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
   then 
     echo "database ${DB_NAME} exists"
     check_operator_log

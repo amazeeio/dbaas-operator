@@ -274,7 +274,7 @@ func (r *MongoDBConsumerReconciler) deleteExternalResources(ctx context.Context,
 			// next time it tries to reconcile, it will just exit here without doing anything else
 			opLog.Info(fmt.Sprintf("Unable to patch the mongodbconsumer with failed status, error was: %v", patchErr))
 		}
-		return nil
+		return errors.New("unable to determine which server to deprovision from, pausing consumer")
 	}
 	consumer := MongoDBConsumerInfo{
 		DatabaseName: mongodbConsumer.Spec.Consumer.Database,

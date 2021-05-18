@@ -254,7 +254,7 @@ func (r *PostgreSQLConsumerReconciler) deleteExternalResources(ctx context.Conte
 			// next time it tries to reconcile, it will just exit here without doing anything else
 			opLog.Info(fmt.Sprintf("Unable to patch the postgresqlconsumer with failed status, error was: %v", patchErr))
 		}
-		return nil
+		return errors.New("unable to determine which server to deprovision from, pausing consumer")
 	}
 	opLog.Info(fmt.Sprintf("Dropping database %s on host %s - %s/%s", postgresqlConsumer.Spec.Consumer.Database, provider.Hostname, provider.Namespace, provider.Name))
 	if err := dropDbAndUser(*provider, *postgresqlConsumer); err != nil {

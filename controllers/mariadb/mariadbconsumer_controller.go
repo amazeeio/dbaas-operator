@@ -333,7 +333,7 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(ctx context.Context,
 			// next time it tries to reconcile, it will just exit here without doing anything else
 			opLog.Info(fmt.Sprintf("Unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
 		}
-		return nil
+		return errors.New("unable to determine which server to deprovision from, pausing consumer")
 	}
 	opLog.Info(fmt.Sprintf("Dropping database %s on host %s - %s/%s", mariaDBConsumer.Spec.Consumer.Database, provider.Hostname, provider.Namespace, provider.Name))
 	if err := dropDbAndUser(*provider, *mariaDBConsumer); err != nil {

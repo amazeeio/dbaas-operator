@@ -18,6 +18,7 @@ package controllers
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -106,109 +107,141 @@ func (r *MongoDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		LabelAppType:    "mongodbconsumer",
 		LabelAppManaged: "dbaas-operator",
 	}
-
-	// examine DeletionTimestamp to determine if object is under deletion
-	if mongodbConsumer.ObjectMeta.DeletionTimestamp.IsZero() {
-		// set up the new credentials, use shorter names for database and username
-		if mongodbConsumer.Spec.Consumer.Database == "" {
-			mongodbConsumer.Spec.Consumer.Database = truncateString(req.NamespacedName.Namespace, 15) + "_" + randSeq(5, false)
-		}
-		if mongodbConsumer.Spec.Consumer.Username == "" {
-			mongodbConsumer.Spec.Consumer.Username = truncateString(req.NamespacedName.Namespace, 15) + "_" + randSeq(5, false)
-		}
-		if mongodbConsumer.Spec.Consumer.Password == "" {
-			mongodbConsumer.Spec.Consumer.Password = randSeq(20, false)
-		}
-		if mongodbConsumer.Spec.Consumer.Services.Primary == "" {
-			mongodbConsumer.Spec.Consumer.Services.Primary = truncateString(req.Name, 25) + "-" + uuid.New().String()
-		}
-
-		provider := &MongoDBProviderInfo{}
-		// if we haven't got any provider specific information pre-defined, we should query the providers to get one
-		if mongodbConsumer.Spec.Provider.Hostname == "" || mongodbConsumer.Spec.Provider.Port == "" {
-			opLog.Info(fmt.Sprintf("Attempting to create database %s on any usable mongodb provider", mongodbConsumer.Spec.Consumer.Database))
-			// check the providers we have to see who is busy
-			if err := r.checkMongoDBProviders(provider, &mongodbConsumer, req.NamespacedName); err != nil {
-				return ctrl.Result{}, err
+	// check if the consumer is in a failed state, this prevents it from constantly re-trying to provision if its failed.
+	// it also don't be able to be removed if it is in a failed state, as there could be an actual reason
+	// and some human intervention required to prevent possible data loss
+	skip := "false"
+	if val, ok := mongodbConsumer.ObjectMeta.Annotations["dbaas.amazee.io/failed"]; !ok {
+		skip = val
+	}
+	if skip != "true" {
+		// examine DeletionTimestamp to determine if object is under deletion
+		if mongodbConsumer.ObjectMeta.DeletionTimestamp.IsZero() {
+			// set up the new credentials, use shorter names for database and username
+			if mongodbConsumer.Spec.Consumer.Database == "" {
+				mongodbConsumer.Spec.Consumer.Database = truncateString(req.NamespacedName.Namespace, 15) + "_" + randSeq(5, false)
 			}
-			if provider.Hostname == "" {
-				opLog.Info("No suitable mongodb providers found, bailing")
+			if mongodbConsumer.Spec.Consumer.Username == "" {
+				mongodbConsumer.Spec.Consumer.Username = truncateString(req.NamespacedName.Namespace, 15) + "_" + randSeq(5, false)
+			}
+			if mongodbConsumer.Spec.Consumer.Password == "" {
+				mongodbConsumer.Spec.Consumer.Password = randSeq(20, false)
+			}
+			if mongodbConsumer.Spec.Consumer.Services.Primary == "" {
+				mongodbConsumer.Spec.Consumer.Services.Primary = truncateString(req.Name, 25) + "-" + uuid.New().String()
+			}
+
+			provider := &MongoDBProviderInfo{}
+			// if we haven't got any provider specific information pre-defined, we should query the providers to get one
+			if mongodbConsumer.Spec.Provider.Hostname == "" || mongodbConsumer.Spec.Provider.Port == "" {
+				opLog.Info(fmt.Sprintf("Attempting to create database %s on any usable mongodb provider", mongodbConsumer.Spec.Consumer.Database))
+				// check the providers we have to see who is busy
+				if err := r.checkMongoDBProviders(provider, &mongodbConsumer, req.NamespacedName); err != nil {
+					opLog.Info(fmt.Sprintf("Error checking the providers in the cluster."))
+					if patchErr := r.patchFailureStatus(ctx, &mongodbConsumer, fmt.Sprintf("Error checking the providers in the cluster: %v", err), true); patchErr != nil {
+						// if we can't patch the resource, just log it and return
+						// next time it tries to reconcile, it will just exit here without doing anything else
+						opLog.Info(fmt.Sprintf("Unable to patch the mongodbconsumer with failed status, error was: %v", patchErr))
+					}
+					return ctrl.Result{}, nil
+				}
+				if provider.Hostname == "" {
+					opLog.Info("No suitable mongodb providers found, bailing")
+					return ctrl.Result{}, nil
+				}
+
+				consumer := MongoDBConsumerInfo{
+					DatabaseName: mongodbConsumer.Spec.Consumer.Database,
+					Username:     mongodbConsumer.Spec.Consumer.Username,
+					Password:     mongodbConsumer.Spec.Consumer.Password,
+				}
+
+				if err := createDatabaseIfNotExist(*provider, consumer); err != nil {
+					opLog.Info("Unable to create database")
+					if patchErr := r.patchFailureStatus(ctx, &mongodbConsumer, fmt.Sprintf("Unable to create database %v", err), true); patchErr != nil {
+						// if we can't patch the resource, just log it and return
+						// next time it tries to reconcile, it will just exit here without doing anything else
+						opLog.Info(fmt.Sprintf("Unable to patch the mongodbconsumer with failed status, error was: %v", patchErr))
+					}
+					return ctrl.Result{}, nil
+				}
+				mongodbConsumer.Spec.Consumer.Auth = provider.Auth
+
+				// populate with provider host information. we don't expose provider credentials here
+				if mongodbConsumer.Spec.Provider.Hostname == "" {
+					mongodbConsumer.Spec.Provider.Hostname = provider.Hostname
+				}
+				if mongodbConsumer.Spec.Provider.Port == "" {
+					mongodbConsumer.Spec.Provider.Port = provider.Port
+				}
+				if mongodbConsumer.Spec.Provider.Name == "" {
+					mongodbConsumer.Spec.Provider.Name = provider.Name
+				}
+				if mongodbConsumer.Spec.Provider.Namespace == "" {
+					mongodbConsumer.Spec.Provider.Namespace = provider.Namespace
+				}
+				mongodbConsumer.Spec.Provider.Auth = provider.Auth
+			}
+
+			// check if service exists, get if it does, create otherwise
+			service := &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      mongodbConsumer.Spec.Consumer.Services.Primary,
+					Labels:    labels,
+					Namespace: mongodbConsumer.ObjectMeta.Namespace,
+				},
+				Spec: corev1.ServiceSpec{
+					ExternalName: mongodbConsumer.Spec.Provider.Hostname,
+					Type:         corev1.ServiceTypeExternalName,
+				},
+			}
+			err := r.Get(context.Background(), types.NamespacedName{Namespace: req.Namespace, Name: service.ObjectMeta.Name}, service)
+			if err != nil {
+				opLog.Info(fmt.Sprintf("Creating service %s in namespace %s", mongodbConsumer.Spec.Consumer.Services.Primary, mongodbConsumer.ObjectMeta.Namespace))
+				if err := r.Create(context.Background(), service); err != nil {
+					opLog.Info(fmt.Sprintf("Error creating service %s in namespace %s", mongodbConsumer.Spec.Consumer.Services.Primary, mongodbConsumer.ObjectMeta.Namespace))
+					if patchErr := r.patchFailureStatus(ctx, &mongodbConsumer, fmt.Sprintf("Error creating service %s: %v", mongodbConsumer.Spec.Consumer.Services.Primary, err), true); patchErr != nil {
+						// if we can't patch the resource, just log it and return
+						// next time it tries to reconcile, it will just exit here without doing anything else
+						opLog.Info(fmt.Sprintf("Unable to patch the mongodbconsumer with failed status, error was: %v", patchErr))
+					}
+					return ctrl.Result{}, nil
+				}
+			}
+			if err := r.Update(context.Background(), service); err != nil {
+				opLog.Info(fmt.Sprintf("Error updating service %s in namespace %s", mongodbConsumer.Spec.Consumer.Services.Primary, mongodbConsumer.ObjectMeta.Namespace))
+				if patchErr := r.patchFailureStatus(ctx, &mongodbConsumer, fmt.Sprintf("Error updating service %s: %v", mongodbConsumer.Spec.Consumer.Services.Primary, err), true); patchErr != nil {
+					// if we can't patch the resource, just log it and return
+					// next time it tries to reconcile, it will just exit here without doing anything else
+					opLog.Info(fmt.Sprintf("Unable to patch the mongodbconsumer with failed status, error was: %v", patchErr))
+				}
 				return ctrl.Result{}, nil
 			}
 
-			consumer := MongoDBConsumerInfo{
-				DatabaseName: mongodbConsumer.Spec.Consumer.Database,
-				Username:     mongodbConsumer.Spec.Consumer.Username,
-				Password:     mongodbConsumer.Spec.Consumer.Password,
+			// The object is not being deleted, so if it does not have our finalizer,
+			// then lets add the finalizer and update the object. This is equivalent
+			// registering our finalizer.
+			if !containsString(mongodbConsumer.ObjectMeta.Finalizers, finalizerName) {
+				mongodbConsumer.ObjectMeta.Finalizers = append(mongodbConsumer.ObjectMeta.Finalizers, finalizerName)
+				if err := r.Update(context.Background(), &mongodbConsumer); err != nil {
+					return ctrl.Result{}, err
+				}
 			}
+		} else {
+			// The object is being deleted
+			if containsString(mongodbConsumer.ObjectMeta.Finalizers, finalizerName) {
+				// our finalizer is present, so lets handle any external dependency
+				if err := r.deleteExternalResources(ctx, &mongodbConsumer, req.NamespacedName.Namespace); err != nil {
+					// if fail to delete the external dependency here, return with error
+					// so that it can be retried
+					return ctrl.Result{}, err
+				}
 
-			if err := createDatabaseIfNotExist(*provider, consumer); err != nil {
-				return ctrl.Result{}, err
-			}
-			mongodbConsumer.Spec.Consumer.Auth = provider.Auth
-
-			// populate with provider host information. we don't expose provider credentials here
-			if mongodbConsumer.Spec.Provider.Hostname == "" {
-				mongodbConsumer.Spec.Provider.Hostname = provider.Hostname
-			}
-			if mongodbConsumer.Spec.Provider.Port == "" {
-				mongodbConsumer.Spec.Provider.Port = provider.Port
-			}
-			if mongodbConsumer.Spec.Provider.Name == "" {
-				mongodbConsumer.Spec.Provider.Name = provider.Name
-			}
-			if mongodbConsumer.Spec.Provider.Namespace == "" {
-				mongodbConsumer.Spec.Provider.Namespace = provider.Namespace
-			}
-			mongodbConsumer.Spec.Provider.Auth = provider.Auth
-		}
-
-		// check if service exists, get if it does, create otherwise
-		service := &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      mongodbConsumer.Spec.Consumer.Services.Primary,
-				Labels:    labels,
-				Namespace: mongodbConsumer.ObjectMeta.Namespace,
-			},
-			Spec: corev1.ServiceSpec{
-				ExternalName: mongodbConsumer.Spec.Provider.Hostname,
-				Type:         corev1.ServiceTypeExternalName,
-			},
-		}
-		err := r.Get(context.Background(), types.NamespacedName{Namespace: req.Namespace, Name: service.ObjectMeta.Name}, service)
-		if err != nil {
-			opLog.Info(fmt.Sprintf("Creating service %s in namespace %s", mongodbConsumer.Spec.Consumer.Services.Primary, mongodbConsumer.ObjectMeta.Namespace))
-			if err := r.Create(context.Background(), service); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-		if err := r.Update(context.Background(), service); err != nil {
-			return ctrl.Result{}, err
-		}
-
-		// The object is not being deleted, so if it does not have our finalizer,
-		// then lets add the finalizer and update the object. This is equivalent
-		// registering our finalizer.
-		if !containsString(mongodbConsumer.ObjectMeta.Finalizers, finalizerName) {
-			mongodbConsumer.ObjectMeta.Finalizers = append(mongodbConsumer.ObjectMeta.Finalizers, finalizerName)
-			if err := r.Update(context.Background(), &mongodbConsumer); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-	} else {
-		// The object is being deleted
-		if containsString(mongodbConsumer.ObjectMeta.Finalizers, finalizerName) {
-			// our finalizer is present, so lets handle any external dependency
-			if err := r.deleteExternalResources(&mongodbConsumer, req.NamespacedName.Namespace); err != nil {
-				// if fail to delete the external dependency here, return with error
-				// so that it can be retried
-				return ctrl.Result{}, err
-			}
-
-			// remove our finalizer from the list and update it.
-			mongodbConsumer.ObjectMeta.Finalizers = removeString(mongodbConsumer.ObjectMeta.Finalizers, finalizerName)
-			if err := r.Update(context.Background(), &mongodbConsumer); err != nil {
-				return ctrl.Result{}, err
+				// remove our finalizer from the list and update it.
+				mongodbConsumer.ObjectMeta.Finalizers = removeString(mongodbConsumer.ObjectMeta.Finalizers, finalizerName)
+				if err := r.Update(context.Background(), &mongodbConsumer); err != nil {
+					return ctrl.Result{}, err
+				}
 			}
 		}
 	}
@@ -222,7 +255,7 @@ func (r *MongoDBConsumerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *MongoDBConsumerReconciler) deleteExternalResources(mongodbConsumer *mongodbv1.MongoDBConsumer, namespace string) error {
+func (r *MongoDBConsumerReconciler) deleteExternalResources(ctx context.Context, mongodbConsumer *mongodbv1.MongoDBConsumer, namespace string) error {
 	opLog := r.Log.WithValues("mongodbconsumer", namespace)
 	//
 	// delete any external resources associated with the mongodbconsumer
@@ -235,7 +268,13 @@ func (r *MongoDBConsumerReconciler) deleteExternalResources(mongodbConsumer *mon
 		return err
 	}
 	if provider.Hostname == "" {
-		return errors.New("Unable to determine server to deprovision from")
+		opLog.Info(fmt.Sprintf("Unable to determine which server to deprovision from, pausing consumer."))
+		if patchErr := r.patchFailureStatus(ctx, mongodbConsumer, "Unable to determine which server to deprovision from", true); patchErr != nil {
+			// if we can't patch the resource, just log it and return
+			// next time it tries to reconcile, it will just exit here without doing anything else
+			opLog.Info(fmt.Sprintf("Unable to patch the mongodbconsumer with failed status, error was: %v", patchErr))
+		}
+		return nil
 	}
 	consumer := MongoDBConsumerInfo{
 		DatabaseName: mongodbConsumer.Spec.Consumer.Database,
@@ -538,4 +577,40 @@ func getMongoDBUsage(provider MongoDBProviderInfo, opLog logr.Logger) (MongoDBUs
 	//@TODO figure out the best way to determine an under utilised mongo
 
 	return currentUsage, nil
+}
+
+func (r *MongoDBConsumerReconciler) patchFailureStatus(
+	ctx context.Context,
+	mongoDBConsumer *mongodbv1.MongoDBConsumer,
+	reason string,
+	failed bool,
+) error {
+	mergePatch, err := json.Marshal(map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"annotations": map[string]interface{}{
+				"dbaas.amazee.io/failed":        fmt.Sprintf("%v", failed),
+				"dbaas.amazee.io/failed-reason": reason,
+				"dbaas.amazee.io/failed-at":     time.Now().UTC().Format("2006-01-02 15:04:05"),
+			},
+		},
+	})
+	if err != nil {
+		r.Log.WithValues("mongodbconsumer", types.NamespacedName{
+			Name:      mongoDBConsumer.ObjectMeta.Name,
+			Namespace: mongoDBConsumer.ObjectMeta.Namespace,
+		}).Info(fmt.Sprintf("Unable to create mergepatch for %s, error was: %v", mongoDBConsumer.ObjectMeta.Name, err))
+		return nil
+	}
+	if err := r.Patch(ctx, mongoDBConsumer, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+		r.Log.WithValues("mongodbconsumer", types.NamespacedName{
+			Name:      mongoDBConsumer.ObjectMeta.Name,
+			Namespace: mongoDBConsumer.ObjectMeta.Namespace,
+		}).Info(fmt.Sprintf("Unable to patch mongodbconsumer %s, error was: %v", mongoDBConsumer.ObjectMeta.Name, err))
+		return nil
+	}
+	r.Log.WithValues("mongodbconsumer", types.NamespacedName{
+		Name:      mongoDBConsumer.ObjectMeta.Name,
+		Namespace: mongoDBConsumer.ObjectMeta.Namespace,
+	}).Info(fmt.Sprintf("Patched mongodbconsumer %s", mongoDBConsumer.ObjectMeta.Name))
+	return nil
 }

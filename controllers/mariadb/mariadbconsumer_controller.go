@@ -17,6 +17,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -106,154 +107,198 @@ func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		LabelAppManaged: "dbaas-operator",
 	}
 
-	// examine DeletionTimestamp to determine if object is under deletion
-	if mariaDBConsumer.ObjectMeta.DeletionTimestamp.IsZero() {
-		// set up the new credentials
-		if mariaDBConsumer.Spec.Consumer.Database == "" {
-			mariaDBConsumer.Spec.Consumer.Database = truncateString(req.NamespacedName.Namespace, 50) + "_" + randSeq(5, false)
-		}
-		if mariaDBConsumer.Spec.Consumer.Username == "" {
-			mariaDBConsumer.Spec.Consumer.Username = truncateString(req.NamespacedName.Namespace, 10) + "_" + randSeq(5, false)
-		}
-		if mariaDBConsumer.Spec.Consumer.Password == "" {
-			mariaDBConsumer.Spec.Consumer.Password = randSeq(24, false)
-		}
-		if mariaDBConsumer.Spec.Consumer.Services.Primary == "" {
-			mariaDBConsumer.Spec.Consumer.Services.Primary = truncateString(req.Name, 25) + "-" + uuid.New().String()
-		}
-
-		provider := &mariadbv1.MariaDBProviderSpec{}
-		// if we haven't got any provider specific information pre-defined, we should query the providers to get one
-		if mariaDBConsumer.Spec.Provider.Hostname == "" || mariaDBConsumer.Spec.Provider.Port == "" || len(mariaDBConsumer.Spec.Provider.ReadReplicaHostnames) == 0 {
-			opLog.Info(fmt.Sprintf("Attempting to create database %s on any usable mariadb provider", mariaDBConsumer.Spec.Consumer.Database))
-			// check the providers we have to see who is busy
-			if err := r.checkMariaDBProviders(provider, &mariaDBConsumer, req.NamespacedName); err != nil {
-				opLog.Error(err, "Error checking the providers in the cluster")
-				return ctrl.Result{}, err
+	// check if the consumer is in a failed state, this prevents it from constantly re-trying to provision if its failed.
+	// it also don't be able to be removed if it is in a failed state, as there could be an actual reason
+	// and some human intervention required to prevent possible data loss
+	skip := "false"
+	if val, ok := mariaDBConsumer.ObjectMeta.Annotations["dbaas.amazee.io/failed"]; !ok {
+		skip = val
+	}
+	if skip != "true" {
+		// examine DeletionTimestamp to determine if object is under deletion
+		if mariaDBConsumer.ObjectMeta.DeletionTimestamp.IsZero() {
+			// set up the new credentials
+			if mariaDBConsumer.Spec.Consumer.Database == "" {
+				mariaDBConsumer.Spec.Consumer.Database = truncateString(req.NamespacedName.Namespace, 50) + "_" + randSeq(5, false)
 			}
-			if provider.Hostname == "" {
-				opLog.Info("No suitable mariadb providers found, bailing")
-				return ctrl.Result{}, nil
+			if mariaDBConsumer.Spec.Consumer.Username == "" {
+				mariaDBConsumer.Spec.Consumer.Username = truncateString(req.NamespacedName.Namespace, 10) + "_" + randSeq(5, false)
+			}
+			if mariaDBConsumer.Spec.Consumer.Password == "" {
+				mariaDBConsumer.Spec.Consumer.Password = randSeq(24, false)
+			}
+			if mariaDBConsumer.Spec.Consumer.Services.Primary == "" {
+				mariaDBConsumer.Spec.Consumer.Services.Primary = truncateString(req.Name, 25) + "-" + uuid.New().String()
 			}
 
-			// populate with provider host information. we don't expose provider credentials here
-			if mariaDBConsumer.Spec.Provider.Hostname == "" {
-				mariaDBConsumer.Spec.Provider.Hostname = provider.Hostname
-			}
-			if mariaDBConsumer.Spec.Provider.Port == "" {
-				mariaDBConsumer.Spec.Provider.Port = provider.Port
-			}
-			// some providers need to do special things, like azure
-			switch provider.Type {
-			case "azure":
-				// the hostname can't be more than 60 characters long, we should check this and fail sooner
-				hostName := strings.Split(provider.Hostname, ".")
-				if len(hostName[0]) > 60 {
-					opLog.Error(errors.New("Hostname is too long"), fmt.Sprintf("Hostname %s is longer than 60 characters", hostName[0]))
-					return ctrl.Result{}, errors.New("Hostname is too long")
+			provider := &mariadbv1.MariaDBProviderSpec{}
+			// if we haven't got any provider specific information pre-defined, we should query the providers to get one
+			if mariaDBConsumer.Spec.Provider.Hostname == "" || mariaDBConsumer.Spec.Provider.Port == "" || len(mariaDBConsumer.Spec.Provider.ReadReplicaHostnames) == 0 {
+				opLog.Info(fmt.Sprintf("Attempting to create database %s on any usable mariadb provider", mariaDBConsumer.Spec.Consumer.Database))
+				// check the providers we have to see who is busy
+				if err := r.checkMariaDBProviders(provider, &mariaDBConsumer, req.NamespacedName); err != nil {
+					opLog.Info(fmt.Sprintf("Error checking the providers in the cluster."))
+					if patchErr := r.patchFailureStatus(ctx, &mariaDBConsumer, fmt.Sprintf("Error checking the providers in the cluster: %v", err), true); patchErr != nil {
+						// if we can't patch the resource, just log it and return
+						// next time it tries to reconcile, it will just exit here without doing anything else
+						opLog.Info(fmt.Sprintf("Unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
+					}
+					return ctrl.Result{}, nil
 				}
-				mariaDBConsumer.Spec.Consumer.Username = mariaDBConsumer.Spec.Consumer.Username + "@" + hostName[0]
-			}
-			if len(mariaDBConsumer.Spec.Provider.ReadReplicaHostnames) == 0 {
-				for _, replica := range provider.ReadReplicaHostnames {
-					mariaDBConsumer.Spec.Provider.ReadReplicaHostnames = append(mariaDBConsumer.Spec.Provider.ReadReplicaHostnames, replica)
+				if provider.Hostname == "" {
+					opLog.Info("No suitable mariadb providers found, bailing")
+					return ctrl.Result{}, nil
 				}
-			}
-			if mariaDBConsumer.Spec.Provider.Name == "" {
-				mariaDBConsumer.Spec.Provider.Name = provider.Name
-			}
-			if mariaDBConsumer.Spec.Provider.Namespace == "" {
-				mariaDBConsumer.Spec.Provider.Namespace = provider.Namespace
-			}
 
-			// once we have all the consumer and provider info, attempt to create the consumer user and database
-			opLog.Info(fmt.Sprintf("Proceeding to create database %s on %s/%s for user %s", mariaDBConsumer.Spec.Consumer.Database, provider.Namespace, provider.Name, mariaDBConsumer.Spec.Consumer.Username))
-			if err := createDatabaseIfNotExist(*provider, mariaDBConsumer); err != nil {
-				opLog.Error(err, "Unable to create database")
-				return ctrl.Result{}, err
-			}
-
-		}
-
-		// check if service exists, get if it does, create otherwise
-		service := &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      mariaDBConsumer.Spec.Consumer.Services.Primary,
-				Labels:    labels,
-				Namespace: mariaDBConsumer.ObjectMeta.Namespace,
-			},
-			Spec: corev1.ServiceSpec{
-				ExternalName: mariaDBConsumer.Spec.Provider.Hostname,
-				Type:         corev1.ServiceTypeExternalName,
-			},
-		}
-		err := r.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: service.ObjectMeta.Name}, service)
-		if err != nil {
-			opLog.Info(fmt.Sprintf("Creating service %s in namespace %s", mariaDBConsumer.Spec.Consumer.Services.Primary, mariaDBConsumer.ObjectMeta.Namespace))
-			if err := r.Create(context.Background(), service); err != nil {
-				opLog.Error(err, fmt.Sprintf("Error creating service %s in namespace %s", mariaDBConsumer.Spec.Consumer.Services.Primary, mariaDBConsumer.ObjectMeta.Namespace))
-				return ctrl.Result{}, err
-			}
-		}
-		if err := r.Update(context.Background(), service); err != nil {
-			opLog.Error(err, fmt.Sprintf("Error updating service %s in namespace %s", mariaDBConsumer.Spec.Consumer.Services.Primary, mariaDBConsumer.ObjectMeta.Namespace))
-			return ctrl.Result{}, err
-		}
-		// check if read replica service exists, get if it does, create otherwise
-		if len(mariaDBConsumer.Spec.Consumer.Services.Replicas) == 0 {
-			for _, replica := range mariaDBConsumer.Spec.Provider.ReadReplicaHostnames {
-				replicaName := truncateString("readreplica-"+req.Name, 25) + "-" + uuid.New().String()
-				mariaDBConsumer.Spec.Consumer.Services.Replicas = append(mariaDBConsumer.Spec.Consumer.Services.Replicas, replicaName)
-				serviceRR := &corev1.Service{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      replicaName,
-						Labels:    labels,
-						Namespace: mariaDBConsumer.ObjectMeta.Namespace,
-					},
-					Spec: corev1.ServiceSpec{
-						ExternalName: replica,
-						Type:         corev1.ServiceTypeExternalName,
-					},
+				// populate with provider host information. we don't expose provider credentials here
+				if mariaDBConsumer.Spec.Provider.Hostname == "" {
+					mariaDBConsumer.Spec.Provider.Hostname = provider.Hostname
 				}
-				err = r.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: serviceRR.ObjectMeta.Name}, serviceRR)
-				if err != nil {
-					opLog.Info(fmt.Sprintf("Creating service %s in namespace %s", replicaName, mariaDBConsumer.ObjectMeta.Namespace))
-					if err := r.Create(context.Background(), serviceRR); err != nil {
-						opLog.Error(err, fmt.Sprintf("Error creating service %s in namespace %s", replicaName, mariaDBConsumer.ObjectMeta.Namespace))
-						return ctrl.Result{}, err
+				if mariaDBConsumer.Spec.Provider.Port == "" {
+					mariaDBConsumer.Spec.Provider.Port = provider.Port
+				}
+				// some providers need to do special things, like azure
+				switch provider.Type {
+				case "azure":
+					// the hostname can't be more than 60 characters long, we should check this and fail sooner
+					hostName := strings.Split(provider.Hostname, ".")
+					if len(hostName[0]) > 60 {
+						opLog.Info(fmt.Sprintf("Hostname %s is longer than 60 characters", hostName[0]))
+						if patchErr := r.patchFailureStatus(ctx, &mariaDBConsumer, fmt.Sprintf("Hostname %s is longer than 60 characters: %v", hostName[0], errors.New("Hostname is too long")), true); patchErr != nil {
+							// if we can't patch the resource, just log it and return
+							// next time it tries to reconcile, it will just exit here without doing anything else
+							opLog.Info(fmt.Sprintf("Unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
+						}
+						return ctrl.Result{}, nil
+					}
+					mariaDBConsumer.Spec.Consumer.Username = mariaDBConsumer.Spec.Consumer.Username + "@" + hostName[0]
+				}
+				if len(mariaDBConsumer.Spec.Provider.ReadReplicaHostnames) == 0 {
+					for _, replica := range provider.ReadReplicaHostnames {
+						mariaDBConsumer.Spec.Provider.ReadReplicaHostnames = append(mariaDBConsumer.Spec.Provider.ReadReplicaHostnames, replica)
 					}
 				}
-				if err := r.Update(context.Background(), serviceRR); err != nil {
-					opLog.Error(err, fmt.Sprintf("Error updating service %s in namespace %s", replicaName, mariaDBConsumer.ObjectMeta.Namespace))
+				if mariaDBConsumer.Spec.Provider.Name == "" {
+					mariaDBConsumer.Spec.Provider.Name = provider.Name
+				}
+				if mariaDBConsumer.Spec.Provider.Namespace == "" {
+					mariaDBConsumer.Spec.Provider.Namespace = provider.Namespace
+				}
+
+				// once we have all the consumer and provider info, attempt to create the consumer user and database
+				opLog.Info(fmt.Sprintf("Proceeding to create database %s on %s/%s for user %s", mariaDBConsumer.Spec.Consumer.Database, provider.Namespace, provider.Name, mariaDBConsumer.Spec.Consumer.Username))
+				if err := createDatabaseIfNotExist(*provider, mariaDBConsumer); err != nil {
+					opLog.Info("Unable to create database")
+					if patchErr := r.patchFailureStatus(ctx, &mariaDBConsumer, fmt.Sprintf("Unable to create database %v", err), true); patchErr != nil {
+						// if we can't patch the resource, just log it and return
+						// next time it tries to reconcile, it will just exit here without doing anything else
+						opLog.Info(fmt.Sprintf("Unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
+					}
+					return ctrl.Result{}, nil
+				}
+
+			}
+
+			// check if service exists, get if it does, create otherwise
+			service := &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      mariaDBConsumer.Spec.Consumer.Services.Primary,
+					Labels:    labels,
+					Namespace: mariaDBConsumer.ObjectMeta.Namespace,
+				},
+				Spec: corev1.ServiceSpec{
+					ExternalName: mariaDBConsumer.Spec.Provider.Hostname,
+					Type:         corev1.ServiceTypeExternalName,
+				},
+			}
+			err := r.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: service.ObjectMeta.Name}, service)
+			if err != nil {
+				opLog.Info(fmt.Sprintf("Creating service %s in namespace %s", mariaDBConsumer.Spec.Consumer.Services.Primary, mariaDBConsumer.ObjectMeta.Namespace))
+				if err := r.Create(context.Background(), service); err != nil {
+					opLog.Info(fmt.Sprintf("Error creating service %s in namespace %s", mariaDBConsumer.Spec.Consumer.Services.Primary, mariaDBConsumer.ObjectMeta.Namespace))
+					if patchErr := r.patchFailureStatus(ctx, &mariaDBConsumer, fmt.Sprintf("Error creating service %s: %v", mariaDBConsumer.Spec.Consumer.Services.Primary, err), true); patchErr != nil {
+						// if we can't patch the resource, just log it and return
+						// next time it tries to reconcile, it will just exit here without doing anything else
+						opLog.Info(fmt.Sprintf("Unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
+					}
+					return ctrl.Result{}, nil
+				}
+			}
+			if err := r.Update(context.Background(), service); err != nil {
+				opLog.Info(fmt.Sprintf("Error updating service %s in namespace %s", mariaDBConsumer.Spec.Consumer.Services.Primary, mariaDBConsumer.ObjectMeta.Namespace))
+				if patchErr := r.patchFailureStatus(ctx, &mariaDBConsumer, fmt.Sprintf("Error updating service %s: %v", mariaDBConsumer.Spec.Consumer.Services.Primary, err), true); patchErr != nil {
+					// if we can't patch the resource, just log it and return
+					// next time it tries to reconcile, it will just exit here without doing anything else
+					opLog.Info(fmt.Sprintf("Unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
+				}
+				return ctrl.Result{}, nil
+			}
+			// check if read replica service exists, get if it does, create otherwise
+			if len(mariaDBConsumer.Spec.Consumer.Services.Replicas) == 0 {
+				for _, replica := range mariaDBConsumer.Spec.Provider.ReadReplicaHostnames {
+					replicaName := truncateString("readreplica-"+req.Name, 25) + "-" + uuid.New().String()
+					mariaDBConsumer.Spec.Consumer.Services.Replicas = append(mariaDBConsumer.Spec.Consumer.Services.Replicas, replicaName)
+					serviceRR := &corev1.Service{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      replicaName,
+							Labels:    labels,
+							Namespace: mariaDBConsumer.ObjectMeta.Namespace,
+						},
+						Spec: corev1.ServiceSpec{
+							ExternalName: replica,
+							Type:         corev1.ServiceTypeExternalName,
+						},
+					}
+					err = r.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: serviceRR.ObjectMeta.Name}, serviceRR)
+					if err != nil {
+						opLog.Info(fmt.Sprintf("Creating service %s in namespace %s", replicaName, mariaDBConsumer.ObjectMeta.Namespace))
+						if err := r.Create(context.Background(), serviceRR); err != nil {
+							opLog.Info(fmt.Sprintf("Error creating service %s in namespace %s", replicaName, mariaDBConsumer.ObjectMeta.Namespace))
+							if patchErr := r.patchFailureStatus(ctx, &mariaDBConsumer, fmt.Sprintf("Error creating service %s: %v", replicaName, err), true); patchErr != nil {
+								// if we can't patch the resource, just log it and return
+								// next time it tries to reconcile, it will just exit here without doing anything else
+								opLog.Info(fmt.Sprintf("Unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
+							}
+							return ctrl.Result{}, nil
+						}
+					}
+					if err := r.Update(context.Background(), serviceRR); err != nil {
+						opLog.Info(fmt.Sprintf("Error updating service %s in namespace %s", replicaName, mariaDBConsumer.ObjectMeta.Namespace))
+						if patchErr := r.patchFailureStatus(ctx, &mariaDBConsumer, fmt.Sprintf("Error updating service %s: %v", replicaName, err), true); patchErr != nil {
+							// if we can't patch the resource, just log it and return
+							// next time it tries to reconcile, it will just exit here without doing anything else
+							opLog.Info(fmt.Sprintf("Unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
+						}
+						return ctrl.Result{}, nil
+					}
+				}
+			}
+
+			// The object is not being deleted, so if it does not have our finalizer,
+			// then lets add the finalizer and update the object. This is equivalent
+			// registering our finalizer.
+			if !containsString(mariaDBConsumer.ObjectMeta.Finalizers, finalizerName) {
+				mariaDBConsumer.ObjectMeta.Finalizers = append(mariaDBConsumer.ObjectMeta.Finalizers, finalizerName)
+				if err := r.Update(context.Background(), &mariaDBConsumer); err != nil {
+					opLog.Error(err, fmt.Sprintf("Error updating consumer %s in namespace %s", mariaDBConsumer.ObjectMeta.Name, mariaDBConsumer.ObjectMeta.Namespace))
 					return ctrl.Result{}, err
 				}
 			}
-		}
+		} else {
+			// The object is being deleted
+			if containsString(mariaDBConsumer.ObjectMeta.Finalizers, finalizerName) {
+				// our finalizer is present, so lets handle any external dependency
+				if err := r.deleteExternalResources(ctx, &mariaDBConsumer, req.NamespacedName.Namespace); err != nil {
+					// if fail to delete the external dependency here, return with error
+					// so that it can be retried
+					return ctrl.Result{}, err
+				}
 
-		// The object is not being deleted, so if it does not have our finalizer,
-		// then lets add the finalizer and update the object. This is equivalent
-		// registering our finalizer.
-		if !containsString(mariaDBConsumer.ObjectMeta.Finalizers, finalizerName) {
-			mariaDBConsumer.ObjectMeta.Finalizers = append(mariaDBConsumer.ObjectMeta.Finalizers, finalizerName)
-			if err := r.Update(context.Background(), &mariaDBConsumer); err != nil {
-				opLog.Error(err, fmt.Sprintf("Error updating consumer %s in namespace %s", mariaDBConsumer.ObjectMeta.Name, mariaDBConsumer.ObjectMeta.Namespace))
-				return ctrl.Result{}, err
-			}
-		}
-	} else {
-		// The object is being deleted
-		if containsString(mariaDBConsumer.ObjectMeta.Finalizers, finalizerName) {
-			// our finalizer is present, so lets handle any external dependency
-			if err := r.deleteExternalResources(&mariaDBConsumer, req.NamespacedName.Namespace); err != nil {
-				// if fail to delete the external dependency here, return with error
-				// so that it can be retried
-				return ctrl.Result{}, err
-			}
-
-			// remove our finalizer from the list and update it.
-			mariaDBConsumer.ObjectMeta.Finalizers = removeString(mariaDBConsumer.ObjectMeta.Finalizers, finalizerName)
-			if err := r.Update(context.Background(), &mariaDBConsumer); err != nil {
-				return ctrl.Result{}, err
+				// remove our finalizer from the list and update it.
+				mariaDBConsumer.ObjectMeta.Finalizers = removeString(mariaDBConsumer.ObjectMeta.Finalizers, finalizerName)
+				if err := r.Update(context.Background(), &mariaDBConsumer); err != nil {
+					return ctrl.Result{}, err
+				}
 			}
 		}
 	}
@@ -268,7 +313,7 @@ func (r *MariaDBConsumerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mariadbv1.MariaDBConsumer, namespace string) error {
+func (r *MariaDBConsumerReconciler) deleteExternalResources(ctx context.Context, mariaDBConsumer *mariadbv1.MariaDBConsumer, namespace string) error {
 	opLog := r.Log.WithValues("mariadbconsumer", namespace)
 	//
 	// delete any external resources associated with the mariadbconsumer
@@ -281,7 +326,14 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(mariaDBConsumer *mar
 		return err
 	}
 	if provider.Hostname == "" {
-		return errors.New("Unable to determine server to deprovision from")
+		// if we can't determine the server to deprovision from
+		opLog.Info(fmt.Sprintf("Unable to determine which server to deprovision from, pausing consumer."))
+		if patchErr := r.patchFailureStatus(ctx, mariaDBConsumer, "Unable to determine which server to deprovision from", true); patchErr != nil {
+			// if we can't patch the resource, just log it and return
+			// next time it tries to reconcile, it will just exit here without doing anything else
+			opLog.Info(fmt.Sprintf("Unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
+		}
+		return nil
 	}
 	opLog.Info(fmt.Sprintf("Dropping database %s on host %s - %s/%s", mariaDBConsumer.Spec.Consumer.Database, provider.Hostname, provider.Namespace, provider.Name))
 	if err := dropDbAndUser(*provider, *mariaDBConsumer); err != nil {
@@ -591,5 +643,41 @@ func (r *MariaDBConsumerReconciler) getMariaDBProvider(provider *mariadbv1.Maria
 			}
 		}
 	}
+	return nil
+}
+
+func (r *MariaDBConsumerReconciler) patchFailureStatus(
+	ctx context.Context,
+	mariaDBConsumer *mariadbv1.MariaDBConsumer,
+	reason string,
+	failed bool,
+) error {
+	mergePatch, err := json.Marshal(map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"annotations": map[string]interface{}{
+				"dbaas.amazee.io/failed":        fmt.Sprintf("%v", failed),
+				"dbaas.amazee.io/failed-reason": reason,
+				"dbaas.amazee.io/failed-at":     time.Now().UTC().Format("2006-01-02 15:04:05"),
+			},
+		},
+	})
+	if err != nil {
+		r.Log.WithValues("mariadbconsumer", types.NamespacedName{
+			Name:      mariaDBConsumer.ObjectMeta.Name,
+			Namespace: mariaDBConsumer.ObjectMeta.Namespace,
+		}).Info(fmt.Sprintf("Unable to create mergepatch for %s, error was: %v", mariaDBConsumer.ObjectMeta.Name, err))
+		return nil
+	}
+	if err := r.Patch(ctx, mariaDBConsumer, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+		r.Log.WithValues("mariadbconsumer", types.NamespacedName{
+			Name:      mariaDBConsumer.ObjectMeta.Name,
+			Namespace: mariaDBConsumer.ObjectMeta.Namespace,
+		}).Info(fmt.Sprintf("Unable to patch mariadbconsumer %s, error was: %v", mariaDBConsumer.ObjectMeta.Name, err))
+		return nil
+	}
+	r.Log.WithValues("mariadbconsumer", types.NamespacedName{
+		Name:      mariaDBConsumer.ObjectMeta.Name,
+		Namespace: mariaDBConsumer.ObjectMeta.Namespace,
+	}).Info(fmt.Sprintf("Patched mariadbconsumer %s", mariaDBConsumer.ObjectMeta.Name))
 	return nil
 }

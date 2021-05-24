@@ -37,6 +37,7 @@ services:
     environment:
       POSTGRES_PASSWORD: 'password'
       POSTGRES_USER: 'postgres'
+      PGPASSWORD: 'password'
     ports:
       - '5432:5432'
   local-dbaas-mongo-provider:

@@ -374,6 +374,21 @@ func createDatabaseIfNotExist(provider postgresv1.PostgreSQLProviderSpec, consum
 		}
 		return fmt.Errorf("Unable to grant user %s permissions on database %s: %v", userName[0], consumer.Spec.Consumer.Database, err)
 	}
+	var changeOwner string
+	changeOwner = fmt.Sprintf("ALTER DATABASE \"%s\" OWNER TO \"%s\";", consumer.Spec.Consumer.Database, userName[0])
+	_, err = db.Exec(changeOwner)
+	if err != nil {
+		// if change ownership fails, drop the database and user that gets created
+		dropErr := dropDatabase(db, consumer.Spec.Consumer.Database)
+		if dropErr != nil {
+			return fmt.Errorf("Unable drop database after failed ownership change: %v", dropErr)
+		}
+		dropErr = dropUser(db, consumer, provider)
+		if dropErr != nil {
+			return fmt.Errorf("Unable drop user after failed ownership change: %v", dropErr)
+		}
+		return fmt.Errorf("Unable to change owner of database %s to %s: %v", consumer.Spec.Consumer.Database, userName[0], err)
+	}
 	return nil
 }
 

@@ -1,6 +1,6 @@
 
 ---
-apiVersion: apiextensions.k8s.io/v1beta1
+apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
@@ -15,52 +15,51 @@ spec:
     plural: postgresqlproviders
     singular: postgresqlprovider
   scope: Namespaced
-  validation:
-    openAPIV3Schema:
-      description: PostgreSQLProvider is the Schema for the postgresqlproviders API
-      properties:
-        apiVersion:
-          description: 'APIVersion defines the versioned schema of this representation
-            of an object. Servers should convert recognized schemas to the latest
-            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-          type: string
-        kind:
-          description: 'Kind is a string value representing the REST resource this
-            object represents. Servers may infer this from the endpoint the client
-            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-          type: string
-        metadata:
-          type: object
-        spec:
-          description: PostgreSQLProviderSpec defines the desired state of PostgreSQLProvider
-          properties:
-            environment:
-              description: These are the spec options for providers
-              type: string
-            hostname:
-              type: string
-            name:
-              type: string
-            namespace:
-              type: string
-            password:
-              type: string
-            port:
-              type: string
-            type:
-              type: string
-            user:
-              type: string
-          type: object
-        status:
-          description: PostgreSQLProviderStatus defines the observed state of PostgreSQLProvider
-          type: object
-      type: object
-  version: v1
   versions:
   - name: v1
     served: true
     storage: true
+    schema:
+      openAPIV3Schema:
+        description: PostgreSQLProvider is the Schema for the postgresqlproviders API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: PostgreSQLProviderSpec defines the desired state of PostgreSQLProvider
+            properties:
+              environment:
+                description: These are the spec options for providers
+                type: string
+              hostname:
+                type: string
+              name:
+                type: string
+              namespace:
+                type: string
+              password:
+                type: string
+              port:
+                type: string
+              type:
+                type: string
+              user:
+                type: string
+            type: object
+          status:
+            description: PostgreSQLProviderStatus defines the observed state of PostgreSQLProvider
+            type: object
+        type: object
 status:
   acceptedNames:
     kind: ""

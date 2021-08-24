@@ -28,7 +28,7 @@ jobs:
         curl -sLo /tmp/kustomize_v3.5.4_linux_amd64.tar.gz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv3.5.4/kustomize_v3.5.4_linux_amd64.tar.gz
         sudo tar -C /usr/local/bin -xzf /tmp/kustomize_v3.5.4_linux_amd64.tar.gz
         #kubebuilder
-        curl -sL https://go.kubebuilder.io/dl/2.2.0/linux/amd64 | tar -xz -C /tmp/
+        curl -sL https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.2.0/kubebuilder_2.2.0_linux_amd64.tar.gz | tar -xz -C /tmp/
         sudo mv /tmp/kubebuilder_2.2.0_linux_amd64 /usr/local/kubebuilder
         #helm
         curl -sL https://get.helm.sh/helm-v3.3.0-rc.1-linux-amd64.tar.gz | tar -xz -C /tmp/
@@ -38,7 +38,7 @@ jobs:
         sudo curl -sLo /usr/local/bin/docker-compose "https://github.com/docker/compose/releases/download/1.29.0/docker-compose-$(uname -s)-$(uname -m)"
         sudo chmod +x /usr/local/bin/docker-compose
         #kind
-        curl -sLo /tmp/kind https://github.com/kubernetes-sigs/kind/releases/download/v0.9.0/kind-linux-amd64
+        curl -sLo /tmp/kind https://github.com/kubernetes-sigs/kind/releases/download/v0.11.1/kind-linux-amd64
         chmod +x /tmp/kind
         sudo mv /tmp/kind /usr/local/bin/
     - name: Create kind cluster

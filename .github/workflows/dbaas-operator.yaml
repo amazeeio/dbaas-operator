@@ -28,10 +28,10 @@ jobs:
         curl -sLo /tmp/kustomize_v3.5.4_linux_amd64.tar.gz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv3.5.4/kustomize_v3.5.4_linux_amd64.tar.gz
         sudo tar -C /usr/local/bin -xzf /tmp/kustomize_v3.5.4_linux_amd64.tar.gz
         #kubebuilder
-        curl -sL https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.2.0/kubebuilder_2.2.0_linux_amd64.tar.gz | tar -xz -C /tmp/
-        sudo mv /tmp/kubebuilder_2.2.0_linux_amd64 /usr/local/kubebuilder
+        curl -sL https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.2/kubebuilder_2.3.2_linux_amd64.tar.gz | tar -xz -C /tmp/
+        sudo mv /tmp/kubebuilder_2.3.2_linux_amd64 /usr/local/kubebuilder
         #helm
-        curl -sL https://get.helm.sh/helm-v3.3.0-rc.1-linux-amd64.tar.gz | tar -xz -C /tmp/
+        curl -sL https://get.helm.sh/helm-v3.6.3-linux-amd64.tar.gz | tar -xz -C /tmp/
         sudo mv /tmp/linux-amd64/helm /usr/local/bin/helm
         chmod +x /usr/local/bin/helm
         #docker-compose

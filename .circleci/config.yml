@@ -38,8 +38,8 @@ jobs:
       - run:
           name: Install kubebuilder
           command: |
-            curl -sL https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.2.0/kubebuilder_2.2.0_linux_amd64.tar.gz | tar -xz -C /tmp/
-            sudo mv /tmp/kubebuilder_2.2.0_linux_amd64 /usr/local/kubebuilder
+            curl -sL https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.2/kubebuilder_2.3.2_linux_amd64.tar.gz | tar -xz -C /tmp/
+            sudo mv /tmp/kubebuilder_2.3.2_linux_amd64 /usr/local/kubebuilder
       - run:
           name: Run Tests
           command: |

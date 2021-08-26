@@ -90,8 +90,8 @@ const (
 // +kubebuilder:rbac:groups="",resources=services,verbs=list;get;watch;create;update;patch;delete
 
 // Reconcile .
-func (r *MariaDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *MariaDBConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// ctx := context.Background()
 	opLog := r.Log.WithValues("mariadbconsumer", req.NamespacedName)
 
 	var mariaDBConsumer mariadbv1.MariaDBConsumer
@@ -668,7 +668,7 @@ func (r *MariaDBConsumerReconciler) patchFailureStatus(
 		}).Info(fmt.Sprintf("Unable to create mergepatch for %s, error was: %v", mariaDBConsumer.ObjectMeta.Name, err))
 		return nil
 	}
-	if err := r.Patch(ctx, mariaDBConsumer, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+	if err := r.Patch(ctx, mariaDBConsumer, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 		r.Log.WithValues("mariadbconsumer", types.NamespacedName{
 			Name:      mariaDBConsumer.ObjectMeta.Name,
 			Namespace: mariaDBConsumer.ObjectMeta.Namespace,

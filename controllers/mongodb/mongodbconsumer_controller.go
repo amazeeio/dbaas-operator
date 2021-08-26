@@ -91,8 +91,8 @@ const (
 // +kubebuilder:rbac:groups="",resources=services,verbs=list;get;watch;create;update;patch;delete
 
 // Reconcile .
-func (r *MongoDBConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *MongoDBConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// ctx := context.Background()
 	opLog := r.Log.WithValues("mongodbconsumer", req.NamespacedName)
 
 	var mongodbConsumer mongodbv1.MongoDBConsumer
@@ -601,7 +601,7 @@ func (r *MongoDBConsumerReconciler) patchFailureStatus(
 		}).Info(fmt.Sprintf("Unable to create mergepatch for %s, error was: %v", mongoDBConsumer.ObjectMeta.Name, err))
 		return nil
 	}
-	if err := r.Patch(ctx, mongoDBConsumer, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+	if err := r.Patch(ctx, mongoDBConsumer, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 		r.Log.WithValues("mongodbconsumer", types.NamespacedName{
 			Name:      mongoDBConsumer.ObjectMeta.Name,
 			Namespace: mongoDBConsumer.ObjectMeta.Namespace,

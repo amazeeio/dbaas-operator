@@ -36,8 +36,8 @@ type PostgreSQLProviderReconciler struct {
 // +kubebuilder:rbac:groups=postgres.amazee.io,resources=postgresqlproviders,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=postgres.amazee.io,resources=postgresqlproviders/status,verbs=get;update;patch
 
-func (r *PostgreSQLProviderReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *PostgreSQLProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// ctx := context.Background()
 	_ = r.Log.WithValues("postgresqlprovider", req.NamespacedName)
 
 	var postgresqlProvider postgresv1.PostgreSQLProvider

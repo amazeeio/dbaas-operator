@@ -16,39 +16,43 @@ jobs:
       uses: actions/checkout@v2
       with:
         fetch-depth: "0"
-    - name: Set up testing dependencies
-      run: sudo apt-get update && sudo apt-get -y install build-essential && sudo apt-get clean
-    - name: Install go, kustomize, kubebuilder, helm, docker-compose, kind
+    - name: Setup correct Go version
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.16'
+    - name: Install kustomize, kubebuilder, helm
       run: |
-        #go
-        sudo rm -rf /usr/local/go
-        curl -sLo /tmp/go1.13.7.linux-amd64.tar.gz https://dl.google.com/go/go1.13.7.linux-amd64.tar.gz
-        sudo tar -C /usr/local -xzf /tmp/go1.13.7.linux-amd64.tar.gz
         #kustomize
         curl -sLo /tmp/kustomize_v3.5.4_linux_amd64.tar.gz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv3.5.4/kustomize_v3.5.4_linux_amd64.tar.gz
         sudo tar -C /usr/local/bin -xzf /tmp/kustomize_v3.5.4_linux_amd64.tar.gz
         #kubebuilder
         curl -sL https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.2/kubebuilder_2.3.2_linux_amd64.tar.gz | tar -xz -C /tmp/
         sudo mv /tmp/kubebuilder_2.3.2_linux_amd64 /usr/local/kubebuilder
+        echo "/usr/local/kubebuilder/bin" >> $GITHUB_PATH
         #helm
         curl -sL https://get.helm.sh/helm-v3.6.3-linux-amd64.tar.gz | tar -xz -C /tmp/
         sudo mv /tmp/linux-amd64/helm /usr/local/bin/helm
         chmod +x /usr/local/bin/helm
-        #docker-compose
-        sudo curl -sLo /usr/local/bin/docker-compose "https://github.com/docker/compose/releases/download/1.29.0/docker-compose-$(uname -s)-$(uname -m)"
-        sudo chmod +x /usr/local/bin/docker-compose
-        #kind
-        curl -sLo /tmp/kind https://github.com/kubernetes-sigs/kind/releases/download/v0.11.1/kind-linux-amd64
-        chmod +x /tmp/kind
-        sudo mv /tmp/kind /usr/local/bin/
+    - name: Check go, kustomize, kubebuilder, helm, docker-compose, kind versions
+      run: |
+        go version
+        kustomize version
+        helm version
+        kubebuilder version
+        kind version
     - name: Create kind cluster
       uses: helm/kind-action@v1.2.0
-      # with:
-      #   config: test-resources/kind-config.yaml
+      with:
+        node_image: kindest/node:v1.21.1
+        config: test-resources/kind-config.yaml
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+    - name: Build
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        load: true
+        tags: amazeeio/dbaas-operator:test-tag
     - name: Run Tests
       run: |
-        export PATH=$PATH:/usr/local/kubebuilder/bin
-        export PATH=$PATH:/usr/local/go/bin
-        export GOPATH=$HOME/go
-        # export GO111MODULE=on
         make operator-test

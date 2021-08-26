@@ -44,7 +44,7 @@ jobs:
       uses: helm/kind-action@v1.2.0
       with:
         node_image: kindest/node:v1.21.1
-        config: test-resources/kind-config.yaml
+        # config: test-resources/kind-config.yaml
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
     - name: Build

@@ -20,6 +20,13 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: '1.16'
+    - name: Install controller-tools
+      env:
+        GO111MODULE: on
+      run: |
+        go mod init sigs.k8s.io/workspace
+        go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.6.2
+        go install sigs.k8s.io/controller-tools/cmd/controller-gen
     - name: Install kustomize, kubebuilder, helm
       run: |
         #kustomize
@@ -40,6 +47,7 @@ jobs:
         helm version
         kubebuilder version
         kind version
+        controller-gen --version
     - name: Create kind cluster
       uses: helm/kind-action@v1.2.0
       with:

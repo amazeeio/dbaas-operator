@@ -544,7 +544,7 @@ fi
 echo -e "${GREEN}==>${LIGHTBLUE}PostgreSQL: ${NOCOLOR} Test PostgreSQL"
 echo -e "${GREEN}====>${LIGHTBLUE}PostgreSQL: ${NOCOLOR} Add a provider"
 kubectl apply -f test-resources/postgres/provider.yaml
-kubectl get postgresqlprovider/postgreprovider-testing -o yaml
+kubectl get postgresqlprovider/postgresprovider-testing -o yaml
 
 echo -e "${GREEN}====>${LIGHTBLUE}PostgreSQL: ${NOCOLOR} Test blank consumer"
 add_delete_consumer_psql test-resources/postgres/consumer.yaml psqlconsumer-testing

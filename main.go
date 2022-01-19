@@ -50,9 +50,18 @@ func init() {
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
+	var disableMariaDBProviders bool
+	var disableMongoDBProviders bool
+	var disablePostreSQLProviders bool
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.BoolVar(&disableMongoDBProviders, "disable-mongodb-providers", false,
+		"Disable MongoDB provider support.")
+	flag.BoolVar(&disablePostreSQLProviders, "disable-postgresql-providers", false,
+		"Disable PostgreSQL provider support.")
+	flag.BoolVar(&disableMariaDBProviders, "disable-mariadb-providers", false,
+		"Disable MariaDB/MySQLDB provider support.")
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
@@ -71,53 +80,64 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&mariadbcontroller.MariaDBConsumerReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("MariaDBConsumer"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "MariaDBConsumer")
+	if disableMariaDBProviders && disablePostreSQLProviders && disableMongoDBProviders {
+		setupLog.Error(err, "all providers are disabled, you must enable at least one")
 		os.Exit(1)
 	}
-	if err = (&mariadbcontroller.MariaDBProviderReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("MariaDBProvider"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "MariaDBProvider")
-		os.Exit(1)
+
+	if !disableMariaDBProviders {
+		if err = (&mariadbcontroller.MariaDBConsumerReconciler{
+			Client: mgr.GetClient(),
+			Log:    ctrl.Log.WithName("controllers").WithName("MariaDBConsumer"),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "MariaDBConsumer")
+			os.Exit(1)
+		}
+		if err = (&mariadbcontroller.MariaDBProviderReconciler{
+			Client: mgr.GetClient(),
+			Log:    ctrl.Log.WithName("controllers").WithName("MariaDBProvider"),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "MariaDBProvider")
+			os.Exit(1)
+		}
 	}
-	if err = (&postgrescontroller.PostgreSQLConsumerReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("PostgreSQLConsumer"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "PostgreSQLConsumer")
-		os.Exit(1)
+	if !disablePostreSQLProviders {
+		if err = (&postgrescontroller.PostgreSQLConsumerReconciler{
+			Client: mgr.GetClient(),
+			Log:    ctrl.Log.WithName("controllers").WithName("PostgreSQLConsumer"),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "PostgreSQLConsumer")
+			os.Exit(1)
+		}
+		if err = (&postgrescontroller.PostgreSQLProviderReconciler{
+			Client: mgr.GetClient(),
+			Log:    ctrl.Log.WithName("controllers").WithName("PostgreSQLProvider"),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "PostgreSQLProvider")
+			os.Exit(1)
+		}
 	}
-	if err = (&postgrescontroller.PostgreSQLProviderReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("PostgreSQLProvider"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "PostgreSQLProvider")
-		os.Exit(1)
-	}
-	if err = (&mongodbcontroller.MongoDBConsumerReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("MongoDBConsumer"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "MongoDBConsumer")
-		os.Exit(1)
-	}
-	if err = (&mongodbcontroller.MongoDBProviderReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("MongoDBProvider"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "MongoDBProvider")
-		os.Exit(1)
+	if !disableMongoDBProviders {
+		if err = (&mongodbcontroller.MongoDBConsumerReconciler{
+			Client: mgr.GetClient(),
+			Log:    ctrl.Log.WithName("controllers").WithName("MongoDBConsumer"),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "MongoDBConsumer")
+			os.Exit(1)
+		}
+		if err = (&mongodbcontroller.MongoDBProviderReconciler{
+			Client: mgr.GetClient(),
+			Log:    ctrl.Log.WithName("controllers").WithName("MongoDBProvider"),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "MongoDBProvider")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 

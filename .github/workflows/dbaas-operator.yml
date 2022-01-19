@@ -11,9 +11,15 @@ on:
 jobs:
   test-suite:
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
+      fail-fast: false
       matrix:
         kindest_node_version: [v1.21.1, v1.22.0]
+        experimental: [false]
+        include:
+          - kindest_node_version: v1.23.0
+            experimental: true
     steps:
     - name: Checkout
       uses: actions/checkout@v2

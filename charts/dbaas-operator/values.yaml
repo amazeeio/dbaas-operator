@@ -6,8 +6,8 @@ replicaCount: 1
 
 image:
   repository: amazeeio/dbaas-operator
-  tag: v0.1.6
   pullPolicy: IfNotPresent
+  tag: ""
 
 kubeRbacProxy:
   image:

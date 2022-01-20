@@ -50,18 +50,18 @@ func init() {
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
-	var disableMariaDBProviders bool
-	var disableMongoDBProviders bool
-	var disablePostreSQLProviders bool
+	var enableMariaDBProviders bool
+	var enableMongoDBProviders bool
+	var enablePostreSQLProviders bool
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
-	flag.BoolVar(&disableMongoDBProviders, "disable-mongodb-providers", false,
-		"Disable MongoDB provider support.")
-	flag.BoolVar(&disablePostreSQLProviders, "disable-postgresql-providers", false,
-		"Disable PostgreSQL provider support.")
-	flag.BoolVar(&disableMariaDBProviders, "disable-mariadb-providers", false,
-		"Disable MariaDB/MySQLDB provider support.")
+	flag.BoolVar(&enableMongoDBProviders, "enable-mongodb-providers", false,
+		"Enable MongoDB provider support.")
+	flag.BoolVar(&enablePostreSQLProviders, "enable-postgresql-providers", false,
+		"Enable PostgreSQL provider support.")
+	flag.BoolVar(&enableMariaDBProviders, "enable-mariadb-providers", true,
+		"Enable MariaDB/MySQLDB provider support.")
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
@@ -80,12 +80,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	if disableMariaDBProviders && disablePostreSQLProviders && disableMongoDBProviders {
+	if !enableMariaDBProviders && !enablePostreSQLProviders && !enableMongoDBProviders {
 		setupLog.Error(err, "all providers are disabled, you must enable at least one")
 		os.Exit(1)
 	}
 
-	if !disableMariaDBProviders {
+	if enableMariaDBProviders {
 		if err = (&mariadbcontroller.MariaDBConsumerReconciler{
 			Client: mgr.GetClient(),
 			Log:    ctrl.Log.WithName("controllers").WithName("MariaDBConsumer"),
@@ -103,7 +103,7 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	if !disablePostreSQLProviders {
+	if enablePostreSQLProviders {
 		if err = (&postgrescontroller.PostgreSQLConsumerReconciler{
 			Client: mgr.GetClient(),
 			Log:    ctrl.Log.WithName("controllers").WithName("PostgreSQLConsumer"),
@@ -121,7 +121,7 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	if !disableMongoDBProviders {
+	if enableMongoDBProviders {
 		if err = (&mongodbcontroller.MongoDBConsumerReconciler{
 			Client: mgr.GetClient(),
 			Log:    ctrl.Log.WithName("controllers").WithName("MongoDBConsumer"),

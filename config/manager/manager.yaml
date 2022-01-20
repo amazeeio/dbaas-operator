@@ -27,9 +27,6 @@ spec:
         - /manager
         args:
         - --enable-leader-election
-        - --enable-mariadb-providers
-        - --enable-postgresql-providers
-        - --enable-mongodb-providers
         image: controller:latest
         name: manager
         resources:

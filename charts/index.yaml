@@ -3,9 +3,9 @@ entries:
   dbaas-operator:
   - apiVersion: v2
     appVersion: 0.2.1
-    created: "2022-01-21T09:17:29.918243+11:00"
+    created: "2022-01-21T09:22:20.025114+11:00"
     description: A Helm chart for dbaas-operator
-    digest: 6260fa53d912ed8b059304202c48a77b568933ebab630ae39cad728c1f688233
+    digest: 3861fe7355da1787b0b9364b484cfd15c5088a09e9f6afb15d6b611c37cb330a
     name: dbaas-operator
     type: application
     urls:
@@ -13,7 +13,7 @@ entries:
     version: 0.2.1
   - apiVersion: v2
     appVersion: 0.1.6
-    created: "2022-01-21T09:17:29.910469+11:00"
+    created: "2022-01-21T09:22:20.018041+11:00"
     description: A Helm chart for dbaas-operator
     digest: f492d4b57e93bc669d23a5fe1f463db509d190abf3c54b856b53bfa89dc7f102
     name: dbaas-operator
@@ -23,7 +23,7 @@ entries:
     version: 0.1.10
   - apiVersion: v2
     appVersion: 0.1.6
-    created: "2022-01-21T09:17:29.917744+11:00"
+    created: "2022-01-21T09:22:20.024568+11:00"
     description: A Helm chart for dbaas-operator
     digest: adcdb786874274e0754330587b11bae63216656259fb0569188a553002c1c3e3
     name: dbaas-operator
@@ -33,7 +33,7 @@ entries:
     version: 0.1.9
   - apiVersion: v2
     appVersion: 0.1.5rc3
-    created: "2022-01-21T09:17:29.916511+11:00"
+    created: "2022-01-21T09:22:20.023411+11:00"
     description: A Helm chart for dbaas-operator
     digest: c9a5323d4923bb3b9f2188773cbb7ce0badc0de0166da73487064b35154ea72c
     name: dbaas-operator
@@ -43,7 +43,7 @@ entries:
     version: 0.1.8
   - apiVersion: v2
     appVersion: 0.1.3
-    created: "2022-01-21T09:17:29.915388+11:00"
+    created: "2022-01-21T09:22:20.022206+11:00"
     description: A Helm chart for dbaas-operator
     digest: a3e809db9edeef3d3b5708cb45a58b8318c2864d5ffab684a4e239ed5e8dd118
     name: dbaas-operator
@@ -53,7 +53,7 @@ entries:
     version: 0.1.6
   - apiVersion: v2
     appVersion: 0.1.2
-    created: "2022-01-21T09:17:29.914142+11:00"
+    created: "2022-01-21T09:22:20.020968+11:00"
     description: A Helm chart for dbaas-operator
     digest: da29683319a4964eccf17ef2aa45caeffda9100acdf22f76869185c7174be65c
     name: dbaas-operator
@@ -63,7 +63,7 @@ entries:
     version: 0.1.5
   - apiVersion: v2
     appVersion: 0.1.1
-    created: "2022-01-21T09:17:29.913346+11:00"
+    created: "2022-01-21T09:22:20.020158+11:00"
     description: A Helm chart for dbaas-operator
     digest: c3f995573c09f887b0fd4370fb07b4148eb1d61f5f5ce3baddf01dd953c724cf
     name: dbaas-operator
@@ -73,7 +73,7 @@ entries:
     version: 0.1.4
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2022-01-21T09:17:29.91273+11:00"
+    created: "2022-01-21T09:22:20.01959+11:00"
     description: A Helm chart for dbaas-operator
     digest: 67712098bd65fce262f59cfcb5566bcd9dee5c0f75afbeccb78bf4776a0b657d
     name: dbaas-operator
@@ -83,7 +83,7 @@ entries:
     version: 0.1.3
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2022-01-21T09:17:29.911882+11:00"
+    created: "2022-01-21T09:22:20.018855+11:00"
     description: A Helm chart for dbaas-operator
     digest: 16294c3b156e3d6192f9205358bce552952c75b8d28b06d37fbc4804e960cd8d
     name: dbaas-operator
@@ -93,7 +93,7 @@ entries:
     version: 0.1.2
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2022-01-21T09:17:29.908697+11:00"
+    created: "2022-01-21T09:22:20.016444+11:00"
     description: A Helm chart for dbaas-operator
     digest: f0f32afe174f62ea1ba792d6a564223cd0ed6ac821bdf7a09cf5c254f02f2fac
     name: dbaas-operator
@@ -103,7 +103,7 @@ entries:
     version: 0.1.1
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2022-01-21T09:17:29.907804+11:00"
+    created: "2022-01-21T09:22:20.015664+11:00"
     description: A Helm chart for dbaas-operator
     digest: 49e3bac9fd6a6eea448accd9483d9fbacd3a3b0b3e2e146c7304b558438c0df2
     name: dbaas-operator
@@ -114,7 +114,7 @@ entries:
   mariadbprovider:
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2022-01-21T09:17:29.91941+11:00"
+    created: "2022-01-21T09:22:20.026421+11:00"
     description: A Helm chart for MariaDBProvider used by dbaas-operator
     digest: b555d1e80be0d034091740cecf41f99bf5ff297ba4f21772b1160be83afb5751
     name: mariadbprovider
@@ -124,7 +124,7 @@ entries:
     version: 0.1.3
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2022-01-21T09:17:29.919078+11:00"
+    created: "2022-01-21T09:22:20.026055+11:00"
     description: A Helm chart for MariaDBProvider used by dbaas-operator
     digest: a59bd057c64ca68b2f52a8b1a6dece0746ebc0ee0f1a6a17c807c8df5d6a0c3e
     name: mariadbprovider
@@ -134,7 +134,7 @@ entries:
     version: 0.1.2
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2022-01-21T09:17:29.918739+11:00"
+    created: "2022-01-21T09:22:20.025669+11:00"
     description: A Helm chart for MariaDBProvider used by dbaas-operator
     digest: bc03d2aa3c0d0aba80063294dbf467cb79b32a408cb34dec1841b531ebd2094c
     name: mariadbprovider
@@ -145,7 +145,7 @@ entries:
   mongodbprovider:
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2022-01-21T09:17:29.920409+11:00"
+    created: "2022-01-21T09:22:20.027576+11:00"
     description: A Helm chart for MongoDBProvider used by dbaas-operator
     digest: b95f3991e86f665f5a4b7a1a61c67eeecb34258b2a28b35298010b7ec22d84b2
     name: mongodbprovider
@@ -155,7 +155,7 @@ entries:
     version: 0.1.2
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2022-01-21T09:17:29.920047+11:00"
+    created: "2022-01-21T09:22:20.027145+11:00"
     description: A Helm chart for MongoDBProvider used by dbaas-operator
     digest: 0cd16ed15beda252eeea69a6c2254f926bb200648321c7d7bd514f2b4f7655ef
     name: mongodbprovider
@@ -165,7 +165,7 @@ entries:
     version: 0.1.1
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2022-01-21T09:17:29.919729+11:00"
+    created: "2022-01-21T09:22:20.026724+11:00"
     description: A Helm chart for MongoDBProvider used by dbaas-operator
     digest: fda5cbc7411eeeb58af9e730aad5bca83a3a22ebc2100a4d71ca5165eef3d6fb
     name: mongodbprovider
@@ -176,7 +176,7 @@ entries:
   postgresqlprovider:
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2022-01-21T09:17:29.922019+11:00"
+    created: "2022-01-21T09:22:20.028609+11:00"
     description: A Helm chart for PostgreSQLProvider used by dbaas-operator
     digest: d7fc208bfad22900ddeee2fc9a92292361ae6ac5a52da7b2822762243a658e60
     name: postgresqlprovider
@@ -186,7 +186,7 @@ entries:
     version: 0.1.1
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2022-01-21T09:17:29.921516+11:00"
+    created: "2022-01-21T09:22:20.02807+11:00"
     description: A Helm chart for PostgreSQLProvider used by dbaas-operator
     digest: 27b6b05d4dfa94020fe122afa69cfe2c4bba351b8b069a660a0403de262ba567
     name: postgresqlprovider
@@ -194,4 +194,4 @@ entries:
     urls:
     - postgresqlprovider-0.1.0.tgz
     version: 0.1.0
-generated: "2022-01-21T09:17:29.906944+11:00"
+generated: "2022-01-21T09:22:20.014889+11:00"

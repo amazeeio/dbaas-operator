@@ -450,8 +450,14 @@ add_delete_consumer_failure () {
 start_up
 build_deploy_operator
 
+echo -e "${GREEN}==>${GREEN}BusyBox: ${NOCOLOR} Add a busybox pod"
+kubectl apply -f test-resources/busybox.yaml
+
 echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Add a provider"
 kubectl apply -f test-resources/mariadb/provider.yaml
+
+echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Check provider"
+kubectl exec -it busybox -- wget -q -O - http://backend.dbaas-operator-system.svc/mariadb/test
 
 echo -e "${GREEN}====>${YELLOW}MariaDB: ${NOCOLOR} Test blank consumer"
 echo "Test adding a blank consumer with a specific environment type."

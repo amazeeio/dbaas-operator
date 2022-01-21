@@ -5,6 +5,19 @@ metadata:
     control-plane: controller-manager
   name: system
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: controller-backend
+  name: controller-backend
+spec:
+  selector:
+    control-plane: controller-manager
+  ports:
+  - name: backend
+    port: 5000
+    targetPort: backend
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -29,11 +42,14 @@ spec:
         - --enable-leader-election
         image: controller:latest
         name: manager
+        ports:
+        - containerPort: 5000
+          name: backend
         resources:
           limits:
             cpu: 100m
-            memory: 50Mi
+            memory: 300Mi
           requests:
             cpu: 100m
-            memory: 20Mi
+            memory: 200Mi
       terminationGracePeriodSeconds: 10

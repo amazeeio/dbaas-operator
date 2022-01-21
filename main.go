@@ -25,6 +25,8 @@ import (
 	mariadbcontroller "github.com/amazeeio/dbaas-operator/controllers/mariadb"
 	mongodbcontroller "github.com/amazeeio/dbaas-operator/controllers/mongodb"
 	postgrescontroller "github.com/amazeeio/dbaas-operator/controllers/postgres"
+
+	"github.com/amazeeio/dbaas-operator/handlers"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -140,6 +142,14 @@ func main() {
 		}
 	}
 	// +kubebuilder:scaffold:builder
+
+	h := &handlers.Client{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers-http").WithName("DBaaS"),
+	}
+	// +kubebuilder:scaffold:builder
+	setupLog.Info("starting http server")
+	go handlers.Run(h, setupLog)
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

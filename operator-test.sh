@@ -139,6 +139,9 @@ build_deploy_operator () {
     exit 1
   fi
   done
+
+  echo -e "${GREEN}==>${GREEN}BusyBox: ${NOCOLOR} Add a busybox pod"
+  kubectl apply -f test-resources/busybox.yaml
 }
 
 check_services () {
@@ -449,9 +452,6 @@ add_delete_consumer_failure () {
 
 start_up
 build_deploy_operator
-
-echo -e "${GREEN}==>${GREEN}BusyBox: ${NOCOLOR} Add a busybox pod"
-kubectl apply -f test-resources/busybox.yaml
 
 echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Add a provider"
 kubectl apply -f test-resources/mariadb/provider.yaml

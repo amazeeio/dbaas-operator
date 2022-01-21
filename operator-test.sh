@@ -78,8 +78,6 @@ mongodb_start_check () {
   done
 }
 
-
-
 mongodb_tls_start_check () {
   until $(docker-compose exec -T local-dbaas-mongo-tls-provider mongo --tls --tlsAllowInvalidCertificates --tlsAllowInvalidHostnames mongodb://root:password@mongodb.172.17.0.1.nip.io:27018/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q admin)
   do
@@ -119,6 +117,9 @@ start_up () {
 }
 
 build_deploy_operator () {
+  echo -e "${GREEN}==>${GREEN}BusyBox: ${NOCOLOR} Add a busybox pod"
+  kubectl apply -f test-resources/busybox.yaml
+
   echo -e "${GREEN}==>${NOCOLOR} Build and deploy operator"
   make docker-build IMG=${OPERATOR_IMAGE}
   kind load docker-image ${OPERATOR_IMAGE} --name ${KIND_NAME}
@@ -139,9 +140,6 @@ build_deploy_operator () {
     exit 1
   fi
   done
-
-  echo -e "${GREEN}==>${GREEN}BusyBox: ${NOCOLOR} Add a busybox pod"
-  kubectl apply -f test-resources/busybox.yaml
 }
 
 check_services () {
@@ -452,6 +450,7 @@ add_delete_consumer_failure () {
 
 start_up
 build_deploy_operator
+
 
 echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Add a provider"
 kubectl apply -f test-resources/mariadb/provider.yaml

@@ -451,12 +451,36 @@ add_delete_consumer_failure () {
 start_up
 build_deploy_operator
 
+echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Check provider"
+echo "Test checking the dbaas-operator http handler for a specific environment type."
+echo "This test should return found true or false, true if there are any usable providers, false if there are none"
+DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator-system.svc:5000/mariadb/non-existent)
+if [ "$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)" != "false" ]; then
+    echo "provider http check returned found when it should have been not found"
+    check_operator_log
+    tear_down
+    exit 1
+fi
+R_FOUND=$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)
+R_ERROR=$(echo ${DBAAS_HTTP_RESULT} | jq -r .error)
+echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Check provider result: ${R_FOUND} / ${R_ERROR}"
 
 echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Add a provider"
 kubectl apply -f test-resources/mariadb/provider.yaml
 
 echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Check provider"
-kubectl exec -it busybox -- wget -q -O - http://controller-backend.dbaas-operator-system.svc/mariadb/test
+echo "Test checking the dbaas-operator http handler for a specific environment type."
+echo "This test should return found true or false, true if there are any usable providers, false if there are none"
+DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator-system.svc:5000/mariadb/test)
+if [ "$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)" != "true" ]; then
+    R_ERROR=$(echo ${DBAAS_HTTP_RESULT} | jq -r .error)
+    echo "provider http check returned not found when it should have been found: ${R_ERROR}"
+    check_operator_log
+    tear_down
+    exit 1
+fi
+R_FOUND=$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)
+echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Check provider result: ${R_FOUND}"
 
 echo -e "${GREEN}====>${YELLOW}MariaDB: ${NOCOLOR} Test blank consumer"
 echo "Test adding a blank consumer with a specific environment type."
@@ -490,6 +514,20 @@ check_operator_log | grep mariadbconsumer-testing-fail1
 echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Add an azure provider"
 kubectl apply -f test-resources/mariadb/provider-azure.yaml
 
+echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Check provider"
+echo "Test checking the dbaas-operator http handler for a specific environment type."
+echo "This test should return found true or false, true if there are any usable providers, false if there are none"
+DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator-system.svc:5000/mariadb/azure)
+if [ "$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)" != "true" ]; then
+    R_ERROR=$(echo ${DBAAS_HTTP_RESULT} | jq -r .error)
+    echo "provider http check returned not found when it should have been found: ${R_ERROR}"
+    check_operator_log
+    tear_down
+    exit 1
+fi
+R_FOUND=$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)
+echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Check provider result: ${R_FOUND}"
+
 echo -e "${GREEN}====>${YELLOW}MariaDB: ${NOCOLOR} Test blank azure consumer"
 echo "Test adding a blank consumer with a specific environment type, but for azure"
 echo "This test should create the database and user, and the associated services randomly"
@@ -501,6 +539,20 @@ check_operator_log | grep mariadbconsumer-testing-azure
 echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Add multi providers"
 kubectl apply -f test-resources/mariadb/provider-multi.yaml
 # testing multiple providers allows testing of the logic to ensure that the correct provider is chosen.
+
+echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Check provider"
+echo "Test checking the dbaas-operator http handler for a specific environment type."
+echo "This test should return found true or false, true if there are any usable providers, false if there are none"
+DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator-system.svc:5000/mariadb/multi)
+if [ "$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)" != "true" ]; then
+    R_ERROR=$(echo ${DBAAS_HTTP_RESULT} | jq -r .error)
+    echo "provider http check returned not found when it should have been found: ${R_ERROR}"
+    check_operator_log
+    tear_down
+    exit 1
+fi
+R_FOUND=$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)
+echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Check provider result: ${R_FOUND}"
 
 echo -e "${GREEN}====>${YELLOW}MariaDB: ${NOCOLOR} Test multi providers"
 echo "Test adding a blank consumer with a specific environment type, but of a type that has multiple providers available"
@@ -552,6 +604,20 @@ echo -e "${GREEN}====>${LIGHTBLUE}PostgreSQL: ${NOCOLOR} Add a provider"
 kubectl apply -f test-resources/postgres/provider.yaml
 kubectl get postgresqlprovider/postgreprovider-testing -o yaml
 
+echo -e "${GREEN}==>${LIGHTBLUE}PostgreSQL: ${NOCOLOR} Check provider"
+echo "Test checking the dbaas-operator http handler for a specific environment type."
+echo "This test should return found true or false, true if there are any usable providers, false if there are none"
+DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator-system.svc:5000/postgres/test)
+if [ "$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)" != "true" ]; then
+    R_ERROR=$(echo ${DBAAS_HTTP_RESULT} | jq -r .error)
+    echo "provider http check returned not found when it should have been found: ${R_ERROR}"
+    check_operator_log
+    tear_down
+    exit 1
+fi
+R_FOUND=$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)
+echo -e "${GREEN}==>${LIGHTBLUE}PostgreSQL: ${NOCOLOR} Check provider result: ${R_FOUND}"
+
 echo -e "${GREEN}====>${LIGHTBLUE}PostgreSQL: ${NOCOLOR} Test blank consumer"
 add_delete_consumer_psql test-resources/postgres/consumer.yaml psqlconsumer-testing
 echo -e "${YELLOW}====>${LIGHTBLUE}PostgreSQL: ${NOCOLOR} Blank consumer logs"
@@ -568,6 +634,20 @@ echo -e "${GREEN}====>${MAGENTA}MongoDB: ${NOCOLOR} Add a provider"
 kubectl apply -f test-resources/mongodb/provider.yaml
 kubectl get mongodbprovider/mongodbprovider-testing -o yaml
 
+echo -e "${GREEN}==>${MAGENTA}MongoDB: ${NOCOLOR} Check provider"
+echo "Test checking the dbaas-operator http handler for a specific environment type."
+echo "This test should return found true or false, true if there are any usable providers, false if there are none"
+DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator-system.svc:5000/mongodb/test)
+if [ "$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)" != "true" ]; then
+    R_ERROR=$(echo ${DBAAS_HTTP_RESULT} | jq -r .error)
+    echo "provider http check returned not found when it should have been found: ${R_ERROR}"
+    check_operator_log
+    tear_down
+    exit 1
+fi
+R_FOUND=$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)
+echo -e "${GREEN}==>${MAGENTA}MongoDB: ${NOCOLOR} Check provider result: ${R_FOUND}"
+
 echo -e "${GREEN}====>${MAGENTA}MongoDB: ${NOCOLOR} Test blank consumer"
 add_delete_consumer_mongodb test-resources/mongodb/consumer.yaml mongodbconsumer-testing
 echo -e "${YELLOW}====>${MAGENTA}MongoDB: ${NOCOLOR} Blank consumer logs"
@@ -583,6 +663,20 @@ echo -e "${GREEN}==>${MAGENTA}MongoDB: ${NOCOLOR} Test MongoDB TLS"
 echo -e "${GREEN}====>${MAGENTA}MongoDB: ${NOCOLOR} Add a TLS provider"
 kubectl apply -f test-resources/mongodb/provider-tls.yaml
 kubectl get mongodbprovider/mongodbprovider-tls-testing -o yaml
+
+echo -e "${GREEN}==>${MAGENTA}MongoDB: ${NOCOLOR} Check provider"
+echo "Test checking the dbaas-operator http handler for a specific environment type."
+echo "This test should return found true or false, true if there are any usable providers, false if there are none"
+DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator-system.svc:5000/mongodb/tls-test)
+if [ "$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)" != "true" ]; then
+    R_ERROR=$(echo ${DBAAS_HTTP_RESULT} | jq -r .error)
+    echo "provider http check returned not found when it should have been found: ${R_ERROR}"
+    check_operator_log
+    tear_down
+    exit 1
+fi
+R_FOUND=$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)
+echo -e "${GREEN}==>${MAGENTA}MongoDB: ${NOCOLOR} Check provider result: ${R_FOUND}"
 
 echo -e "${GREEN}====>${MAGENTA}MongoDB: ${NOCOLOR} Test blank TLS consumer"
 add_delete_consumer_mongodb_tls test-resources/mongodb/consumer-tls.yaml mongodbconsumer-tls-testing

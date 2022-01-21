@@ -18,8 +18,8 @@ import (
 const (
 	// ContentType name of the header that defines the format of the reply
 	ContentType = "Content-Type"
-	// DBaaSHeader name of the header that contains if this has been served by dbaas
-	DBaaSHeader = "X-DBaaS"
+	// DBaaSEnvironmentType name of the header that contains if this has been served by dbaas
+	DBaaSEnvironmentType = "X-DBaaS-Environment-Type"
 	// CacheControl name of the header that defines the cache control config
 	CacheControl = "Cache-Control"
 )
@@ -70,14 +70,14 @@ func (h *Client) mariaDBHandler(w http.ResponseWriter, r *http.Request) {
 	opLog := h.Log.WithValues("dbaas-operator", "mariadb")
 	providers := &mariadbv1.MariaDBProviderList{}
 
-	w.Header().Set(ContentType, "text/plain")
-	w.Header().Set(DBaaSHeader, "true")
+	w.Header().Set(ContentType, "application/json")
+	w.Header().Set(DBaaSEnvironmentType, environmentType)
 	w.Header().Set(CacheControl, "private,no-store")
 
 	if err := h.Client.List(ctx, providers); err != nil {
-		opLog.Info(fmt.Sprintf("Unable to get any providers"))
-		w.WriteHeader(404)
-		fmt.Fprintln(w, "notfound")
+		opLog.Info(fmt.Sprintf("Unable to get any providers, error was: %s", err.Error()))
+		w.WriteHeader(200)
+		fmt.Fprintln(w, fmt.Sprintf(`{"result":{"found":false},"error":"%s"}`, err.Error()))
 		return
 	}
 	hasProvider := false
@@ -89,10 +89,11 @@ func (h *Client) mariaDBHandler(w http.ResponseWriter, r *http.Request) {
 	if hasProvider {
 		opLog.Info(fmt.Sprintf("Providers for %s exist", environmentType))
 		w.WriteHeader(200)
-		fmt.Fprintln(w, "found")
+		fmt.Fprintln(w, `{"result":{"found":true}}`)
 	} else {
-		w.WriteHeader(404)
-		fmt.Fprintln(w, "notfound")
+		opLog.Info(fmt.Sprintf("No providers for %s exist", environmentType))
+		w.WriteHeader(200)
+		fmt.Fprintln(w, fmt.Sprintf(`{"result":{"found":false},"error":"no providers for dbaas environment %s"}`, environmentType))
 	}
 }
 
@@ -104,14 +105,14 @@ func (h *Client) mongoDBHandler(w http.ResponseWriter, r *http.Request) {
 	opLog := h.Log.WithValues("dbaas-operator", "mongodb")
 	providers := &mongodbv1.MongoDBProviderList{}
 
-	w.Header().Set(ContentType, "text/plain")
-	w.Header().Set(DBaaSHeader, "true")
+	w.Header().Set(ContentType, "application/json")
+	w.Header().Set(DBaaSEnvironmentType, environmentType)
 	w.Header().Set(CacheControl, "private,no-store")
 
 	if err := h.Client.List(ctx, providers); err != nil {
-		opLog.Info(fmt.Sprintf("Unable to get any providers"))
-		w.WriteHeader(404)
-		fmt.Fprintln(w, "notfound")
+		opLog.Info(fmt.Sprintf("Unable to get any providers, error was: %s", err.Error()))
+		w.WriteHeader(200)
+		fmt.Fprintln(w, fmt.Sprintf(`{"result":{"found":false},"error":"%s"}`, err.Error()))
 		return
 	}
 	hasProvider := false
@@ -123,10 +124,11 @@ func (h *Client) mongoDBHandler(w http.ResponseWriter, r *http.Request) {
 	if hasProvider {
 		opLog.Info(fmt.Sprintf("Providers for %s exist", environmentType))
 		w.WriteHeader(200)
-		fmt.Fprintln(w, "found")
+		fmt.Fprintln(w, `{"result":{"found":true}}`)
 	} else {
-		w.WriteHeader(404)
-		fmt.Fprintln(w, "notfound")
+		opLog.Info(fmt.Sprintf("No providers for %s exist", environmentType))
+		w.WriteHeader(200)
+		fmt.Fprintln(w, fmt.Sprintf(`{"result":{"found":false},"error":"no providers for dbaas environment %s"}`, environmentType))
 	}
 }
 
@@ -138,14 +140,14 @@ func (h *Client) postgresHandler(w http.ResponseWriter, r *http.Request) {
 	opLog := h.Log.WithValues("dbaas-operator", "postgres")
 	providers := &postgresv1.PostgreSQLProviderList{}
 
-	w.Header().Set(ContentType, "text/plain")
-	w.Header().Set(DBaaSHeader, "true")
+	w.Header().Set(ContentType, "application/json")
+	w.Header().Set(DBaaSEnvironmentType, environmentType)
 	w.Header().Set(CacheControl, "private,no-store")
 
 	if err := h.Client.List(ctx, providers); err != nil {
-		opLog.Info(fmt.Sprintf("Unable to get any providers"))
-		w.WriteHeader(404)
-		fmt.Fprintln(w, "notfound")
+		opLog.Info(fmt.Sprintf("Unable to get any providers, error was: %s", err.Error()))
+		w.WriteHeader(200)
+		fmt.Fprintln(w, fmt.Sprintf(`{"result":{"found":false},"error":"%s"}`, err.Error()))
 		return
 	}
 	hasProvider := false
@@ -157,9 +159,10 @@ func (h *Client) postgresHandler(w http.ResponseWriter, r *http.Request) {
 	if hasProvider {
 		opLog.Info(fmt.Sprintf("Providers for %s exist", environmentType))
 		w.WriteHeader(200)
-		fmt.Fprintln(w, "found")
+		fmt.Fprintln(w, `{"result":{"found":true}}`)
 	} else {
-		w.WriteHeader(404)
-		fmt.Fprintln(w, "notfound")
+		opLog.Info(fmt.Sprintf("No providers for %s exist", environmentType))
+		w.WriteHeader(200)
+		fmt.Fprintln(w, fmt.Sprintf(`{"result":{"found":false},"error":"no providers for dbaas environment %s"}`, environmentType))
 	}
 }

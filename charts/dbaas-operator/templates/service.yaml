@@ -14,3 +14,17 @@ spec:
       name: https
   selector:
     {{- include "dbaas-operator.selectorLabels" . | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dbaas-operator.fullname" . }}-http
+  labels:
+    {{- include "dbaas-operator.labels" . | nindent 4 }}
+spec:
+  ports:
+  - name: backend
+    port: 5000
+    targetPort: backend
+  selector:
+    {{- include "dbaas-operator.selectorLabels" . | nindent 4 }}

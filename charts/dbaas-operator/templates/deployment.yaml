@@ -48,6 +48,9 @@ spec:
           - /manager
           image: "{{ .Values.image.repository }}:{{ coalesce .Values.image.tag .Chart.AppVersion }}"
           name: manager
+          ports:
+          - containerPort: 5000
+            name: backend
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

@@ -5,7 +5,8 @@ go 1.16
 require (
 	github.com/go-logr/logr v0.4.0
 	github.com/go-sql-driver/mysql v1.5.0
-	github.com/google/uuid v1.1.2
+	github.com/google/uuid v1.1.1
+	github.com/gorilla/mux v1.8.0
 	github.com/lib/pq v1.3.0
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.14.0

@@ -35,17 +35,24 @@ spec:
         - args:
           - --metrics-addr=127.0.0.1:8080
           - --enable-leader-election
+          {{- if .Values.enableMariaDBProviders }}
+          - --enable-mariadb-providers
+          {{- end }}
+          {{- if .Values.enableMongoDBProviders }}
+          - --enable-mongodb-providers
+          {{- end }}
+          {{- if .Values.enablePostreSQLProviders }}
+          - --enable-postgresql-providers
+          {{- end }}
           command:
           - /manager
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}:{{ coalesce .Values.image.tag .Chart.AppVersion }}"
           name: manager
+          ports:
+          - containerPort: 5000
+            name: backend
           resources:
-            limits:
-              cpu: 100m
-              memory: 50Mi
-            requests:
-              cpu: 100m
-              memory: 20Mi
+            {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

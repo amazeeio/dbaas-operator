@@ -153,6 +153,7 @@ rules:
   - subjectaccessreviews
   verbs:
   - create
+{{if .Values.enableMariaDBProviders}}
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -179,6 +180,8 @@ rules:
 - apiGroups: ["mariadb.amazee.io"]
   resources: ["mariadbproviders"]
   verbs: ["*"]
+{{- end }}
+{{if .Values.enablePostreSQLProviders}}
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -205,6 +208,8 @@ rules:
 - apiGroups: ["postgres.amazee.io"]
   resources: ["postgresqlproviders"]
   verbs: ["*"]
+{{- end }}
+{{if .Values.enableMongoDBProviders}}
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -231,3 +236,4 @@ rules:
 - apiGroups: ["mongodb.amazee.io"]
   resources: ["mongodbproviders"]
   verbs: ["*"]
+{{- end }}

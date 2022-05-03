@@ -9,11 +9,10 @@ MAGENTA='\033[1;35m'
 POSTGRES_VERSION=$(cat test-resources/Dockerfile.postgres | grep FROM | awk '{print $2}')
 MONGODB_VERSION=$(cat test-resources/Dockerfile.mongo | grep FROM | awk '{print $2}')
 
-#KIND_VER=v1.13.12
-#KIND_VER=v1.14.10
-#KIND_VER=v1.15.7
-#KIND_VER=v1.16.4
-KIND_VER=v1.17.0
+KIND_VER=v1.19.11
+#KIND_VER=v1.20.7
+#KIND_VER=v1.21.1
+#KIND_VER=v1.22.0
 # or get the latest tagged version of a specific k8s version of kind
 #KIND_VER=$(curl -s https://hub.docker.com/v2/repositories/kindest/node/tags | jq -r '.results | .[].name' | grep 'v1.17' | sort -Vr | head -1)
 KIND_NAME=chart-testing
@@ -602,7 +601,7 @@ fi
 echo -e "${GREEN}==>${LIGHTBLUE}PostgreSQL: ${NOCOLOR} Test PostgreSQL"
 echo -e "${GREEN}====>${LIGHTBLUE}PostgreSQL: ${NOCOLOR} Add a provider"
 kubectl apply -f test-resources/postgres/provider.yaml
-kubectl get postgresqlprovider/postgreprovider-testing -o yaml
+kubectl get postgresqlprovider/postgresprovider-testing -o yaml
 
 echo -e "${GREEN}==>${LIGHTBLUE}PostgreSQL: ${NOCOLOR} Check provider"
 echo "Test checking the dbaas-operator http handler for a specific environment type."

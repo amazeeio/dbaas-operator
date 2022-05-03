@@ -68,8 +68,8 @@ const (
 // +kubebuilder:rbac:groups=postgres.amazee.io,resources=postgresqlconsumers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=services,verbs=list;get;watch;create;update;patch;delete
 
-func (r *PostgreSQLConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *PostgreSQLConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// ctx := context.Background()
 	opLog := r.Log.WithValues("postgresqlconsumer", req.NamespacedName)
 
 	var postgresqlConsumer postgresv1.PostgreSQLConsumer
@@ -580,7 +580,7 @@ func (r *PostgreSQLConsumerReconciler) patchFailureStatus(
 		}).Info(fmt.Sprintf("Unable to create mergepatch for %s, error was: %v", postgresqlConsumer.ObjectMeta.Name, err))
 		return nil
 	}
-	if err := r.Patch(ctx, postgresqlConsumer, client.ConstantPatch(types.MergePatchType, mergePatch)); err != nil {
+	if err := r.Patch(ctx, postgresqlConsumer, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 		r.Log.WithValues("postgresqlconsumer", types.NamespacedName{
 			Name:      postgresqlConsumer.ObjectMeta.Name,
 			Namespace: postgresqlConsumer.ObjectMeta.Namespace,

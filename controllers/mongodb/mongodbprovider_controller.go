@@ -37,8 +37,8 @@ type MongoDBProviderReconciler struct {
 // +kubebuilder:rbac:groups=mongodb.amazee.io,resources=mongodbproviders/status,verbs=get;update;patch
 
 // Reconcile .
-func (r *MongoDBProviderReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *MongoDBProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// ctx := context.Background()
 	_ = r.Log.WithValues("mongodbprovider", req.NamespacedName)
 
 	var mongodbProvider mongodbv1.MongoDBProvider

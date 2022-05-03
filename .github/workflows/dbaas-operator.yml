@@ -1,0 +1,67 @@
+name: DBaaS Operator Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test-suite:
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        kindest_node_version: [v1.21.1, v1.22.0]
+        experimental: [false]
+        include:
+          - kindest_node_version: v1.23.0
+            experimental: true
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: "0"
+    - name: Setup correct Go version
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.16'
+    - name: Install kustomize, kubebuilder, helm
+      run: |
+        #kustomize
+        curl -sLo /tmp/kustomize_v3.5.4_linux_amd64.tar.gz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv3.5.4/kustomize_v3.5.4_linux_amd64.tar.gz
+        sudo tar -C /usr/local/bin -xzf /tmp/kustomize_v3.5.4_linux_amd64.tar.gz
+        #kubebuilder
+        curl -sL https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.2/kubebuilder_2.3.2_linux_amd64.tar.gz | tar -xz -C /tmp/
+        sudo mv /tmp/kubebuilder_2.3.2_linux_amd64 /usr/local/kubebuilder
+        echo "/usr/local/kubebuilder/bin" >> $GITHUB_PATH
+        #helm
+        curl -sL https://get.helm.sh/helm-v3.6.3-linux-amd64.tar.gz | tar -xz -C /tmp/
+        sudo mv /tmp/linux-amd64/helm /usr/local/bin/helm
+        chmod +x /usr/local/bin/helm
+    - name: Check go, kustomize, kubebuilder, helm, docker-compose, kind versions
+      run: |
+        go version
+        kustomize version
+        helm version
+        kubebuilder version
+        kind version
+    - name: Create kind cluster
+      uses: helm/kind-action@v1.2.0
+      with:
+        node_image: kindest/node:${{ matrix.kindest_node_version }}
+        # config: test-resources/kind-config.yaml
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+    - name: Build
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        load: true
+        tags: amazeeio/dbaas-operator:test-tag
+    - name: Run Tests
+      run: |
+        make operator-test

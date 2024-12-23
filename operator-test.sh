@@ -25,7 +25,7 @@ check_operator_log () {
 }
 
 postgres_start_check () {
-  until $(docker-compose exec -T local-dbaas-psql-provider psql -h localhost -p 5432 -U postgres postgres -c "SELECT datname FROM pg_database" | grep -q "postgres")
+  until $(docker compose exec -T local-dbaas-psql-provider psql -h localhost -p 5432 -U postgres postgres -c "SELECT datname FROM pg_database" | grep -q "postgres")
   do
   if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
     let CHECK_COUNTER=CHECK_COUNTER+1
@@ -39,7 +39,7 @@ postgres_start_check () {
 }
 
 mariadb_start_check () {
-  until $(docker-compose exec -T mysql mysql --host=local-dbaas-mariadb-provider --port=3306 -uroot -e 'show databases;' | grep -q "information_schema")
+  until $(docker compose exec -T mysql mysql --host=local-dbaas-mariadb-provider --port=3306 -uroot -e 'show databases;' | grep -q "information_schema")
   do
   if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
     let CHECK_COUNTER=CHECK_COUNTER+1
@@ -50,7 +50,7 @@ mariadb_start_check () {
     exit 1
   fi
   done
-  until $(docker-compose exec -T mysql mysql --host=local-dbaas-provider-mariadb-multi --port=3306 -uroot -e 'show databases;' | grep -q "information_schema")
+  until $(docker compose exec -T mysql mysql --host=local-dbaas-provider-mariadb-multi --port=3306 -uroot -e 'show databases;' | grep -q "information_schema")
   do
   if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
     let CHECK_COUNTER=CHECK_COUNTER+1
@@ -64,7 +64,7 @@ mariadb_start_check () {
 }
 
 mongodb_start_check () {
-  until $(docker-compose exec -T local-dbaas-mongo-provider mongo mongodb://root:password@mongodb.172.17.0.1.nip.io:27017/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q admin)
+  until $(docker compose exec -T local-dbaas-mongo-provider mongo mongodb://root:password@mongodb.172.17.0.1.nip.io:27017/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q admin)
   do
   if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
     let CHECK_COUNTER=CHECK_COUNTER+1
@@ -78,7 +78,7 @@ mongodb_start_check () {
 }
 
 mongodb_tls_start_check () {
-  until $(docker-compose exec -T local-dbaas-mongo-tls-provider mongo --tls --tlsAllowInvalidCertificates --tlsAllowInvalidHostnames mongodb://root:password@mongodb.172.17.0.1.nip.io:27018/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q admin)
+  until $(docker compose exec -T local-dbaas-mongo-tls-provider mongo --tls --tlsAllowInvalidCertificates --tlsAllowInvalidHostnames mongodb://root:password@mongodb.172.17.0.1.nip.io:27018/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q admin)
   do
   if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
     let CHECK_COUNTER=CHECK_COUNTER+1
@@ -94,13 +94,13 @@ mongodb_tls_start_check () {
 tear_down () {
   echo -e "${GREEN}============= TEAR DOWN =============${NOCOLOR}"
   kind delete cluster --name ${KIND_NAME}
-  docker-compose down
+  docker compose down
 }
 
 start_up () {
   echo -e "${GREEN}================ BEGIN ================${NOCOLOR}"
   echo -e "${GREEN}==>${NOCOLOR} Bring up local provider"
-  docker-compose up -d
+  docker compose up -d
   CHECK_COUNTER=1
   echo -e "${GREEN}==> Ensure mariadb database providers are running${NOCOLOR}"
   mariadb_start_check
@@ -198,7 +198,7 @@ add_delete_consumer_mariadb () {
   kubectl get mariadbconsumer/$2 -o yaml
   DB_NAME=$(kubectl get mariadbconsumer/$2 -o json | jq -r '.spec.consumer.database')
   echo -e "${GREEN}==>${NOCOLOR} Check if the operator creates the database"
-  DB_EXISTS=$(docker-compose exec -T mysql mysql --host=${3:-local-dbaas-mariadb-provider} --port=3306 -uroot -qfsBNe "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '${DB_NAME}';")
+  DB_EXISTS=$(docker compose exec -T mysql mysql --host=${3:-local-dbaas-mariadb-provider} --port=3306 -uroot -qfsBNe "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '${DB_NAME}';")
   if [[ ! -z "${DB_EXISTS}" ]]
   then 
     echo "database ${DB_NAME} exists"
@@ -223,7 +223,7 @@ add_delete_consumer_mariadb () {
     exit 1
   fi
   echo -e "${GREEN}==>${NOCOLOR} Check if the operator deletes the database"
-  DB_EXISTS=$(docker-compose exec -T mysql mysql --host=${3:-local-dbaas-mariadb-provider} --port=3306 -uroot -qfsBNe "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '${DB_NAME}';")
+  DB_EXISTS=$(docker compose exec -T mysql mysql --host=${3:-local-dbaas-mariadb-provider} --port=3306 -uroot -qfsBNe "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '${DB_NAME}';")
   if [[ ! -z "${DB_EXISTS}" ]]
   then 
     echo "database ${DB_NAME} exists"
@@ -256,7 +256,7 @@ add_delete_consumer_psql () {
   kubectl get postgresqlconsumer/$2 -o yaml
   DB_NAME=$(kubectl get postgresqlconsumer/$2 -o json | jq -r '.spec.consumer.database')
   echo -e "${GREEN}==>${NOCOLOR} Check if the operator creates the database"
-  DB_EXISTS=$(docker-compose exec -T local-dbaas-psql-provider psql -h localhost -p 5432 -U postgres postgres --no-align --tuples-only -c "SELECT datname FROM pg_database;" | grep -q "${DB_NAME}")
+  DB_EXISTS=$(docker compose exec -T local-dbaas-psql-provider psql -h localhost -p 5432 -U postgres postgres --no-align --tuples-only -c "SELECT datname FROM pg_database;" | grep -q "${DB_NAME}")
   if [[ -z "${DB_EXISTS}" ]]
   then 
     echo "database ${DB_NAME} exists"
@@ -280,7 +280,7 @@ add_delete_consumer_psql () {
     exit 1
   fi
   echo -e "${GREEN}==>${NOCOLOR} Check if the operator deletes the database"
-  DB_EXISTS=$(docker-compose exec -T local-dbaas-psql-provider psql -h localhost -p 5432 -U postgres postgres --no-align --tuples-only -c "SELECT datname FROM pg_database;" | grep -q "${DB_NAME}")
+  DB_EXISTS=$(docker compose exec -T local-dbaas-psql-provider psql -h localhost -p 5432 -U postgres postgres --no-align --tuples-only -c "SELECT datname FROM pg_database;" | grep -q "${DB_NAME}")
   if [[ ! -z "${DB_EXISTS}" ]]
   then 
     echo "database ${DB_NAME} exists"
@@ -326,7 +326,7 @@ add_delete_consumer_mongodb () {
   else
     echo "Timeout of $CHECK_TIMEOUT for database creation reached"
     check_operator_log
-    docker-compose logs local-dbaas-mongo-provider
+    docker compose logs local-dbaas-mongo-provider
     exit 1
   fi
   done
@@ -334,7 +334,7 @@ add_delete_consumer_mongodb () {
   kubectl get mongodbconsumer/$2 -o yaml
   DB_NAME=$(kubectl get mongodbconsumer/$2 -o json | jq -r '.spec.consumer.database')
   echo "==> Check if the operator creates the database"
-  if docker-compose exec -T local-dbaas-mongo-provider mongo mongodb://root:password@mongodb.172.17.0.1.nip.io:27017/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
+  if docker compose exec -T local-dbaas-mongo-provider mongo mongodb://root:password@mongodb.172.17.0.1.nip.io:27017/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
   then 
     echo "database ${DB_NAME} exists"
   else 
@@ -355,7 +355,7 @@ add_delete_consumer_mongodb () {
     exit 1
   fi
   echo "==> Check if the operator deletes the database"
-  if docker-compose exec -T local-dbaas-mongo-provider mongo mongodb://root:password@mongodb.172.17.0.1.nip.io:27017/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
+  if docker compose exec -T local-dbaas-mongo-provider mongo mongodb://root:password@mongodb.172.17.0.1.nip.io:27017/  --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
   then 
     echo "database ${DB_NAME} exists"
     check_operator_log
@@ -399,7 +399,7 @@ add_delete_consumer_mongodb_tls () {
   else
     echo "Timeout of $CHECK_TIMEOUT for database creation reached"
     check_operator_log
-    docker-compose logs local-dbaas-mongo-tls-provider
+    docker compose logs local-dbaas-mongo-tls-provider
     exit 1
   fi
   done
@@ -407,7 +407,7 @@ add_delete_consumer_mongodb_tls () {
   kubectl get mongodbconsumer/$2 -o yaml
   DB_NAME=$(kubectl get mongodbconsumer/$2 -o json | jq -r '.spec.consumer.database')
   echo "==> Check if the operator creates the database"
-  if docker-compose exec -T local-dbaas-mongo-tls-provider mongo --tls --tlsAllowInvalidCertificates --tlsAllowInvalidHostnames mongodb://root:password@mongodb.172.17.0.1.nip.io:27018/ --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
+  if docker compose exec -T local-dbaas-mongo-tls-provider mongo --tls --tlsAllowInvalidCertificates --tlsAllowInvalidHostnames mongodb://root:password@mongodb.172.17.0.1.nip.io:27018/ --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
   then 
     echo "database ${DB_NAME} exists"
   else 
@@ -428,7 +428,7 @@ add_delete_consumer_mongodb_tls () {
     exit 1
   fi
   echo "==> Check if the operator deletes the database"
-  if docker-compose exec -T local-dbaas-mongo-tls-provider mongo --tls --tlsAllowInvalidCertificates --tlsAllowInvalidHostnames mongodb://root:password@mongodb.172.17.0.1.nip.io:27018/ --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
+  if docker compose exec -T local-dbaas-mongo-tls-provider mongo --tls --tlsAllowInvalidCertificates --tlsAllowInvalidHostnames mongodb://root:password@mongodb.172.17.0.1.nip.io:27018/ --quiet --eval 'db.getMongo().getDBNames().forEach(function(db){print(db)})' | grep -q "${DB_NAME}"
   then 
     echo "database ${DB_NAME} exists"
     check_operator_log
@@ -491,7 +491,7 @@ check_operator_log | grep mariadbconsumer-testing
 echo -e "${GREEN}====>${YELLOW}MariaDB: ${NOCOLOR} Test seeded consumer"
 echo "Test adding a seeded consumer with a specific environment type."
 echo "This test already has pre-seeded database username and password, but will create the associated services"
-docker-compose exec -T mysql mysql --host=local-dbaas-mariadb-provider --port=3306 -uroot -e "CREATE DATABASE IF NOT EXISTS testdb; CREATE USER IF NOT EXISTS testdb@'%' IDENTIFIED BY 'testdb'; GRANT ALL ON testdb.* TO testdb@'%'; FLUSH PRIVILEGES;"
+docker compose exec -T mysql mysql --host=local-dbaas-mariadb-provider --port=3306 -uroot -e "CREATE DATABASE IF NOT EXISTS testdb; CREATE USER IF NOT EXISTS testdb@'%' IDENTIFIED BY 'testdb'; GRANT ALL ON testdb.* TO testdb@'%'; FLUSH PRIVILEGES;"
 add_delete_consumer_mariadb test-resources/mariadb/consumer-test.yaml mariadbconsumer-testing-2
 echo -e "${YELLOW}====>${YELLOW}MariaDB: ${NOCOLOR} Seeded consumer logs"
 check_operator_log | grep mariadbconsumer-testing-2
@@ -499,7 +499,7 @@ check_operator_log | grep mariadbconsumer-testing-2
 echo -e "${GREEN}====>${YELLOW}MariaDB: ${NOCOLOR} Test seeded consumer V2"
 echo "Test adding a seeded consumer with a specific environment type."
 echo "This test already has pre-seeded database username and password, but will create the associated services"
-docker-compose exec -T mysql mysql --host=local-dbaas-mariadb-provider --port=3306 -uroot -e "CREATE DATABASE IF NOT EXISTS testdb1; CREATE USER IF NOT EXISTS testdb1@'%' IDENTIFIED BY 'testdb1'; GRANT ALL ON testdb1.* TO testdb1@'%'; FLUSH PRIVILEGES;"
+docker compose exec -T mysql mysql --host=local-dbaas-mariadb-provider --port=3306 -uroot -e "CREATE DATABASE IF NOT EXISTS testdb1; CREATE USER IF NOT EXISTS testdb1@'%' IDENTIFIED BY 'testdb1'; GRANT ALL ON testdb1.* TO testdb1@'%'; FLUSH PRIVILEGES;"
 add_delete_consumer_mariadb test-resources/mariadb/consumer-test-2.yaml mariadbconsumer-testing-3
 echo -e "${YELLOW}====>${YELLOW}MariaDB: ${NOCOLOR} Seeded consumer 2 logs"
 check_operator_log | grep mariadbconsumer-testing-3
@@ -557,29 +557,29 @@ echo -e "${GREEN}====>${YELLOW}MariaDB: ${NOCOLOR} Test multi providers"
 echo "Test adding a blank consumer with a specific environment type, but of a type that has multiple providers available"
 echo "This test should create the database and user, and the associated services randomly, but choose the lowest table/schema count provider"
 echo -e "${GREEN}======>${YELLOW}MariaDB: ${NOCOLOR} Create db multidb"
-docker-compose exec -T mysql mysql --host=local-dbaas-provider-mariadb-multi --port=3306 -uroot -e "CREATE DATABASE IF NOT EXISTS multidb;CREATE TABLE multidb.Persons (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb.Persons2 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb.Persons3 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb.Persons4 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));"
+docker compose exec -T mysql mysql --host=local-dbaas-provider-mariadb-multi --port=3306 -uroot -e "CREATE DATABASE IF NOT EXISTS multidb;CREATE TABLE multidb.Persons (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb.Persons2 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb.Persons3 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb.Persons4 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));"
 
 echo -e "${GREEN}====>${YELLOW}MariaDB: ${NOCOLOR} Test blank multi consumer"
 add_delete_consumer_mariadb test-resources/mariadb/consumer-multi.yaml mariadbconsumer-testing-multi
 echo -e "${YELLOW}====>${YELLOW}MariaDB: ${NOCOLOR} Multi consumer logs"
 check_operator_log | grep mariadbconsumer-testing-multi
-docker-compose exec -T mysql mysql --host=local-dbaas-provider-mariadb-multi --port=3306 -uroot -e "DROP DATABASE multidb;"
+docker compose exec -T mysql mysql --host=local-dbaas-provider-mariadb-multi --port=3306 -uroot -e "DROP DATABASE multidb;"
 
 echo -e "${GREEN}====>${YELLOW}MariaDB: ${NOCOLOR} Test multi providers part 2"
 echo "Test adding a blank consumer with a specific environment type, but of a type that has multiple providers available"
 echo "This test should create the database and user, and the associated services randomly, but choose the lowest table/schema count provider"
 echo "This test adds additional tables to the first provider, so it should choose the second provider"
 echo -e "${GREEN}======>${YELLOW}MariaDB: ${NOCOLOR} Create db multidb"
-docker-compose exec -T mysql mysql --host=local-dbaas-mariadb-provider --port=3306 -uroot -e "CREATE DATABASE IF NOT EXISTS multidb;CREATE TABLE multidb.Persons (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb.Persons2 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb.Persons3 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb.Persons4 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));"
+docker compose exec -T mysql mysql --host=local-dbaas-mariadb-provider --port=3306 -uroot -e "CREATE DATABASE IF NOT EXISTS multidb;CREATE TABLE multidb.Persons (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb.Persons2 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb.Persons3 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb.Persons4 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));"
 echo -e "${GREEN}======>${YELLOW}MariaDB: ${NOCOLOR} Create db multidb2"
-docker-compose exec -T mysql mysql --host=local-dbaas-mariadb-provider --port=3306 -uroot -e "CREATE DATABASE IF NOT EXISTS multidb2;CREATE TABLE multidb2.Persons (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb2.Persons2 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb2.Persons3 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb2.Persons4 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));"
+docker compose exec -T mysql mysql --host=local-dbaas-mariadb-provider --port=3306 -uroot -e "CREATE DATABASE IF NOT EXISTS multidb2;CREATE TABLE multidb2.Persons (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb2.Persons2 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb2.Persons3 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));CREATE TABLE multidb2.Persons4 (PersonID int,LastName varchar(255),FirstName varchar(255),Address varchar(255),City varchar(255));"
 
 echo -e "${GREEN}====>${YELLOW}MariaDB: ${NOCOLOR} Test blank multi consumer part 2"
 add_delete_consumer_mariadb test-resources/mariadb/consumer-multi2.yaml mariadbconsumer-testing-multi2 local-dbaas-provider-mariadb-multi
 echo -e "${YELLOW}====>${YELLOW}MariaDB: ${NOCOLOR} Multi consumer 2 logs"
 check_operator_log | grep mariadbconsumer-testing-multi2
-docker-compose exec -T mysql mysql --host=local-dbaas-mariadb-provider --port=3306 -uroot -e "DROP DATABASE multidb;"
-docker-compose exec -T mysql mysql --host=local-dbaas-mariadb-provider --port=3306 -uroot -e "DROP DATABASE multidb2;"
+docker compose exec -T mysql mysql --host=local-dbaas-mariadb-provider --port=3306 -uroot -e "DROP DATABASE multidb;"
+docker compose exec -T mysql mysql --host=local-dbaas-mariadb-provider --port=3306 -uroot -e "DROP DATABASE multidb2;"
 
 echo -e "${GREEN}====>${YELLOW}MariaDB: ${NOCOLOR} Test blank azure consumer with long hostname"
 echo "Test adding a blank consumer with a specific environment type, but for azure"
@@ -589,7 +589,7 @@ echo "Testing for the failure, it should give up trying to create the user"
 add_delete_consumer_failure test-resources/mariadb/consumer-azure-long.yaml mariadbconsumer-testing-azure-long
 echo -e "${YELLOW}====>${YELLOW}MariaDB: ${NOCOLOR} Azure consumer logs"
 check_operator_log | grep mariadbconsumer-testing-azure-long
-DB_EXISTS=$(docker-compose exec -T mysql mysql --host=${3:-local-dbaas-mariadb-provider} --port=3306 -uroot -qfsBNe "SELECT schema_name FROM information_schema.schemata;" | egrep -v "information_schema|^db|performance_schema|mysql")
+DB_EXISTS=$(docker compose exec -T mysql mysql --host=${3:-local-dbaas-mariadb-provider} --port=3306 -uroot -qfsBNe "SELECT schema_name FROM information_schema.schemata;" | egrep -v "information_schema|^db|performance_schema|mysql")
 if [[ ! -z "${DB_EXISTS}" ]]
 then
     echo "databases exist when they shouldn't"

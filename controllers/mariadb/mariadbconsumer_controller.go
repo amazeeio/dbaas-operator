@@ -42,6 +42,7 @@ import (
 )
 
 // MariaDBConsumerReconciler reconciles a MariaDBConsumer object
+
 type MariaDBConsumerReconciler struct {
 	client.Client
 	Log                        logr.Logger
@@ -59,10 +60,11 @@ type MariaDBConsumerReconciler struct {
 		Namespace string
 	}
 	Consumer struct {
-		Database string
-		Password string
-		Username string
-		Services struct {
+		Database          string
+		Password          string
+		PasswordSecretRef *PasswordSecretRef
+		Username          string
+		Services          struct {
 			ServiceHostname            string
 			ServiceReadReplicaHostname string
 		}
@@ -91,6 +93,7 @@ const (
 
 // Reconcile .
 func (r *MariaDBConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+
 	// ctx := context.Background()
 	opLog := r.Log.WithValues("mariadbconsumer", req.NamespacedName)
 
@@ -124,7 +127,27 @@ func (r *MariaDBConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			if mariaDBConsumer.Spec.Consumer.Username == "" {
 				mariaDBConsumer.Spec.Consumer.Username = truncateString(req.NamespacedName.Namespace, 10) + "_" + randSeq(5, false)
 			}
-			if mariaDBConsumer.Spec.Consumer.Password == "" {
+			if mariaDBConsumer.Spec.Consumer.PasswordSecretRef != nil {
+				var secret corev1.Secret
+				secretName := types.NamespacedName{
+					Name:      mariaDBConsumer.Spec.Consumer.PasswordSecretRef.Name,
+					Namespace: mariaDBConsumer.Namespace,
+				}
+				err := r.Get(ctx, secretName, &secret)
+				if err != nil {
+					opLog.Error(err, "Failed to get password secret")
+					// You can decide whether to fail reconciliation here or generate a password as fallback
+					return ctrl.Result{}, err
+				}
+				val, ok := secret.Data[mariaDBConsumer.Spec.Consumer.PasswordSecretRef.Key]
+				if !ok {
+					err := fmt.Errorf("key %s not found in Secret %s", mariaDBConsumer.Spec.Consumer.PasswordSecretRef.Key, secretName.Name)
+					opLog.Error(err, "Secret key missing")
+					return ctrl.Result{}, err
+				}
+				mariaDBConsumer.Spec.Consumer.Password = string(val)
+			} else if mariaDBConsumer.Spec.Consumer.Password == "" {
+				// No Secret ref, generate random password as fallback
 				mariaDBConsumer.Spec.Consumer.Password = randSeq(24, false)
 			}
 			if mariaDBConsumer.Spec.Consumer.Services.Primary == "" {
@@ -136,7 +159,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			if mariaDBConsumer.Spec.Provider.Hostname == "" || mariaDBConsumer.Spec.Provider.Port == "" || len(mariaDBConsumer.Spec.Provider.ReadReplicaHostnames) == 0 {
 				opLog.Info(fmt.Sprintf("Attempting to create database %s on any usable mariadb provider", mariaDBConsumer.Spec.Consumer.Database))
 				// check the providers we have to see who is busy
-				if err := r.checkMariaDBProviders(provider, &mariaDBConsumer, req.NamespacedName); err != nil {
+				if err := r.checkMariaDBProviders(ctx, provider, &mariaDBConsumer, req.NamespacedName); err != nil {
 					opLog.Info(fmt.Sprintf("Error checking the providers in the cluster."))
 					if patchErr := r.patchFailureStatus(ctx, &mariaDBConsumer, fmt.Sprintf("Error checking the providers in the cluster: %v", err), true); patchErr != nil {
 						// if we can't patch the resource, just log it and return
@@ -187,11 +210,9 @@ func (r *MariaDBConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 				// once we have all the consumer and provider info, attempt to create the consumer user and database
 				opLog.Info(fmt.Sprintf("Proceeding to create database %s on %s/%s for user %s", mariaDBConsumer.Spec.Consumer.Database, provider.Namespace, provider.Name, mariaDBConsumer.Spec.Consumer.Username))
-				if err := createDatabaseIfNotExist(*provider, mariaDBConsumer); err != nil {
+				if err := createDatabaseIfNotExist(ctx, r.Client, provider.Namespace, *provider, mariaDBConsumer); err != nil {
 					opLog.Info("Unable to create database")
 					if patchErr := r.patchFailureStatus(ctx, &mariaDBConsumer, fmt.Sprintf("Unable to create database %v", err), true); patchErr != nil {
-						// if we can't patch the resource, just log it and return
-						// next time it tries to reconcile, it will just exit here without doing anything else
 						opLog.Info(fmt.Sprintf("Unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
 					}
 					return ctrl.Result{}, nil
@@ -322,7 +343,7 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(ctx context.Context,
 	// multiple types for same object.
 	// check the providers we have
 	provider := &mariadbv1.MariaDBProviderSpec{}
-	if err := r.getMariaDBProvider(provider, mariaDBConsumer, opLog); err != nil {
+	if err := r.getMariaDBProvider(provider, mariaDBConsumer, ctx, opLog); err != nil {
 		return err
 	}
 	if provider.Hostname == "" {
@@ -336,8 +357,7 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(ctx context.Context,
 		return errors.New("unable to determine which server to deprovision from, pausing consumer")
 	}
 	opLog.Info(fmt.Sprintf("Dropping database %s on host %s - %s/%s", mariaDBConsumer.Spec.Consumer.Database, provider.Hostname, provider.Namespace, provider.Name))
-	if err := dropDbAndUser(*provider, *mariaDBConsumer); err != nil {
-		// If the database doesn't exist, then we can still continue deprovisioning.
+	if err := dropDbAndUser(ctx, r.Client, provider.Namespace, *provider, *mariaDBConsumer); err != nil {
 		if strings.Contains(err.Error(), "database doesn't exist") {
 			opLog.Info(fmt.Sprintf("Error dropping database: %v, continuing with deprovisioning.", err))
 		} else {
@@ -398,8 +418,31 @@ func randSeq(n int, dns bool) string {
 	return string(b)
 }
 
-func createDatabaseIfNotExist(provider mariadbv1.MariaDBProviderSpec, consumer mariadbv1.MariaDBConsumer) error {
-	db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
+func fetchPasswordFromSecret(ctx context.Context, client client.Client, ref *mariadbv1.SecretKeyRef, namespace string) (string, error) {
+	if ref == nil {
+		return "", fmt.Errorf("password secret reference is nil")
+	}
+	secret := &corev1.Secret{}
+	err := client.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: namespace}, secret)
+	if err != nil {
+		return "", err
+	}
+	pwdBytes, ok := secret.Data[ref.Key]
+	if !ok {
+		return "", fmt.Errorf("key %s not found in secret %s", ref.Key, ref.Name)
+	}
+	return string(pwdBytes), nil
+}
+
+func createDatabaseIfNotExist(ctx context.Context, client client.Client, providerNamespace string, provider mariadbv1.MariaDBProviderSpec, consumer mariadbv1.MariaDBConsumer) error {
+	password, err := fetchPasswordFromSecret(ctx, client, provider.PasswordSecretRef, providerNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to fetch provider password: %v", err)
+	}
+
+	connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/", provider.Username, password, provider.Hostname, provider.Port)
+
+	db, err := sql.Open("mysql", connStr)
 	if err != nil {
 		return fmt.Errorf("Unable to connect to provider: %v", err)
 	}
@@ -456,9 +499,20 @@ func createDatabaseIfNotExist(provider mariadbv1.MariaDBProviderSpec, consumer m
 	}
 	return nil
 }
+func dropDbAndUser(
+	ctx context.Context,
+	client client.Client,
+	providerNamespace string,
+	provider mariadbv1.MariaDBProviderSpec,
+	consumer mariadbv1.MariaDBConsumer,
+) error {
+	password, err := fetchPasswordFromSecret(ctx, client, provider.PasswordSecretRef, providerNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to fetch provider password: %v", err)
+	}
 
-func dropDbAndUser(provider mariadbv1.MariaDBProviderSpec, consumer mariadbv1.MariaDBConsumer) error {
-	db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
+	connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/", provider.Username, password, provider.Hostname, provider.Port)
+	db, err := sql.Open("mysql", connStr)
 	if err != nil {
 		return fmt.Errorf("Unable to connect to provider: %v", err)
 	}
@@ -505,14 +559,22 @@ func dropUser(db *sql.DB, consumer mariadbv1.MariaDBConsumer, provider mariadbv1
 	return nil
 }
 
-// check the usage of the mariadb provider and return true/false if we can use it
-func getMariaDBUsage(provider mariadbv1.MariaDBProviderSpec, opLog logr.Logger) (MariaDBUsage, error) {
-	currentUsage := MariaDBUsage{
-		SchemaCount: 0,
-		TableCount:  0,
+func getMariaDBUsage(
+	ctx context.Context,
+	client client.Client,
+	providerNamespace string,
+	provider mariadbv1.MariaDBProviderSpec,
+	opLog logr.Logger,
+) (MariaDBUsage, error) {
+	currentUsage := MariaDBUsage{}
+
+	password, err := fetchPasswordFromSecret(ctx, client, provider.PasswordSecretRef, providerNamespace)
+	if err != nil {
+		return currentUsage, fmt.Errorf("failed to fetch provider password: %w", err)
 	}
 
-	db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
+	connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/", provider.Username, password, provider.Hostname, provider.Port)
+	db, err := sql.Open("mysql", connStr)
 	if err != nil {
 		return currentUsage, fmt.Errorf("Unable to connect to %s using %s: %v", provider.Hostname, provider.Username, err)
 	}
@@ -520,109 +582,126 @@ func getMariaDBUsage(provider mariadbv1.MariaDBProviderSpec, opLog logr.Logger) 
 	var tableCountQuery = `SELECT COUNT(1) AS TableCount
 	FROM information_schema.tables
 	WHERE table_schema NOT IN ('information_schema','mysql', 'sys');`
-	result, err := db.Query(tableCountQuery)
+
+	tableRows, err := db.Query(tableCountQuery)
 	if err != nil {
-		return currentUsage, fmt.Errorf("Unable to execute query %s on %s: %v", tableCountQuery, provider.Hostname, err)
+		return currentUsage, fmt.Errorf("Unable to execute query %s on %s", provider.Hostname, err)
 	}
-	for result.Next() {
-		var value int
-		err = result.Scan(&value)
-		if err != nil {
-			return currentUsage, fmt.Errorf("Unable to scan results for query %s on %s: %v", tableCountQuery, provider.Hostname, err)
+	defer tableRows.Close()
+
+	if tableRows.Next() {
+		if err := tableRows.Scan(&currentUsage.TableCount); err != nil {
+			return currentUsage, fmt.Errorf("Unable to scan results for query %s on  %s", provider.Hostname, err)
 		}
-		opLog.Info(fmt.Sprintf("Table count on host %s has reached %v - %s/%s", provider.Hostname, value, provider.Namespace, provider.Name))
-		currentUsage.TableCount = value
+		opLog.Info("Fetched table count",
+			"host", provider.Hostname,
+			"count", currentUsage.TableCount,
+			"namespace", provider.Namespace,
+			"name", provider.Name,
+		)
 	}
 
+	// Schema count
 	var schemaCountQuery = `SELECT COUNT(*) AS SchemaCount
 	FROM information_schema.SCHEMATA
 	WHERE schema_name NOT IN ('information_schema','mysql', 'sys');`
-	result, err = db.Query(schemaCountQuery)
+
+	schemaRows, err := db.Query(schemaCountQuery)
 	if err != nil {
-		return currentUsage, fmt.Errorf("Unable to execute query %s on %s: %v", schemaCountQuery, provider.Hostname, err)
+		return currentUsage, fmt.Errorf("Unable to execute schema count query on %s: %w", provider.Hostname, err)
 	}
-	for result.Next() {
-		var value int
-		err = result.Scan(&value)
-		if err != nil {
-			return currentUsage, fmt.Errorf("Unable to scan results for query %s on %s: %v", schemaCountQuery, provider.Hostname, err)
+	defer schemaRows.Close()
+
+	if schemaRows.Next() {
+		if err := schemaRows.Scan(&currentUsage.SchemaCount); err != nil {
+			return currentUsage, fmt.Errorf("failed to scan schema count result on %s: %w", provider.Hostname, err)
 		}
-		opLog.Info(fmt.Sprintf("Schema count on host %s has reached %v - %s/%s", provider.Hostname, value, provider.Namespace, provider.Name))
-		currentUsage.SchemaCount = value
+		opLog.Info("Fetched schema count",
+			"host", provider.Hostname,
+			"count", currentUsage.SchemaCount,
+			"namespace", provider.Namespace,
+			"name", provider.Name,
+		)
 	}
 
 	return currentUsage, nil
 }
 
 // Grab all the MariaDBProvider kinds and check each one
-func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *mariadbv1.MariaDBProviderSpec, mariaDBConsumer *mariadbv1.MariaDBConsumer, namespaceName types.NamespacedName) error {
+func (r *MariaDBConsumerReconciler) checkMariaDBProviders(
+	ctx context.Context,
+	provider *mariadbv1.MariaDBProviderSpec,
+	mariaDBConsumer *mariadbv1.MariaDBConsumer,
+	namespaceName types.NamespacedName,
+) error {
 	opLog := r.Log.WithValues("mariadbconsumer", namespaceName)
+
 	providers := &mariadbv1.MariaDBProviderList{}
-	src := providers.DeepCopyObject()
-	if err := r.List(context.TODO(), src.(*mariadbv1.MariaDBProviderList)); err != nil {
-		return fmt.Errorf("Unable to list providers in the cluster, there may be none or something went wrong: %v", err)
+	if err := r.List(ctx, providers); err != nil {
+		return fmt.Errorf("Unable to list providers in the cluster: %v", err)
 	}
-	providersList := src.(*mariadbv1.MariaDBProviderList)
 
-	// We need to loop around all available providers to check their current
-	// usage.
-	// @TODO make this more complex and use more usage data in the calculation.
-	// @TODO use the name of the provider in the log statement (not just the
-	// hostname).
-	var bestHostname string
-	var nameSpaceName string
-	lowestTableCount := -1
-	for _, v := range providersList.Items {
-		if v.Spec.Environment == mariaDBConsumer.Spec.Environment {
-			// Form a temporary connection object.
-			mDBProvider := mariadbv1.MariaDBProviderSpec{
-				Hostname:  v.Spec.Hostname,
-				Username:  v.Spec.Username,
-				Password:  v.Spec.Password,
-				Port:      v.Spec.Port,
-				Name:      v.ObjectMeta.Name,
-				Namespace: v.ObjectMeta.Namespace,
-				Type:      v.Spec.Type,
-			}
-			currentUsage, err := getMariaDBUsage(mDBProvider, r.Log.WithValues("mariadbconsumer", namespaceName))
-			if err != nil {
-				return fmt.Errorf("Unable to get provider usage, something went wrong: %v", err)
-			}
+	var (
+		bestProvider     *mariadbv1.MariaDBProvider
+		lowestTableCount = -1
+	)
 
-			if lowestTableCount < 0 || currentUsage.TableCount < lowestTableCount {
-				bestHostname = v.Spec.Hostname
-				nameSpaceName = mDBProvider.Namespace + "/" + mDBProvider.Name
-				lowestTableCount = currentUsage.TableCount
-			}
+	for i, v := range providers.Items {
+		if v.Spec.Environment != mariaDBConsumer.Spec.Environment {
+			continue
+		}
+
+		tempProvider := mariadbv1.MariaDBProviderSpec{
+			Hostname:  v.Spec.Hostname,
+			Username:  v.Spec.Username,
+			Port:      v.Spec.Port,
+			Name:      v.Name,
+			Namespace: v.Namespace,
+			Type:      v.Spec.Type,
+		}
+
+		// Pass password as part of a temporary copy for usage check
+		currentUsage, err := getMariaDBUsage(ctx, r.Client, v.Namespace, mariadbv1.MariaDBProviderSpec{
+			Hostname:          tempProvider.Hostname,
+			Username:          tempProvider.Username,
+			Port:              tempProvider.Port,
+			Name:              tempProvider.Name,
+			Namespace:         tempProvider.Namespace,
+			Type:              tempProvider.Type,
+			PasswordSecretRef: v.Spec.PasswordSecretRef,
+		}, opLog)
+
+		if err != nil {
+			opLog.Error(err, "Unable to get provider usage")
+			continue
+		}
+
+		if lowestTableCount < 0 || currentUsage.TableCount < lowestTableCount {
+			lowestTableCount = currentUsage.TableCount
+			bestProvider = &providers.Items[i]
 		}
 	}
 
-	opLog.Info(fmt.Sprintf("Best database hostname %s has the lowest table count %v - %s", bestHostname, lowestTableCount, nameSpaceName))
-
-	// After working out the lowest usage database, return it.
-	if bestHostname != "" {
-		for _, v := range providersList.Items {
-			if v.Spec.Environment == mariaDBConsumer.Spec.Environment {
-				if bestHostname == v.Spec.Hostname {
-					provider.Hostname = v.Spec.Hostname
-					provider.ReadReplicaHostnames = v.Spec.ReadReplicaHostnames
-					provider.Username = v.Spec.Username
-					provider.Password = v.Spec.Password
-					provider.Port = v.Spec.Port
-					provider.Name = v.ObjectMeta.Name
-					provider.Namespace = v.ObjectMeta.Namespace
-					provider.Type = v.Spec.Type
-					return nil
-				}
-			}
-		}
+	if bestProvider == nil {
+		return errors.New("No suitable usable database servers")
 	}
+	provider.Hostname = bestProvider.Spec.Hostname
+	provider.ReadReplicaHostnames = bestProvider.Spec.ReadReplicaHostnames
+	provider.Username = bestProvider.Spec.Username
+	provider.PasswordSecretRef = bestProvider.Spec.PasswordSecretRef
+	provider.Port = bestProvider.Spec.Port
+	provider.Name = bestProvider.Name
+	provider.Namespace = bestProvider.Namespace
+	provider.Type = bestProvider.Spec.Type
 
-	return errors.New("No suitable usable database servers")
+	opLog.Info(fmt.Sprintf("Best database hostname %s has the lowest table count %v - %s/%s",
+		provider.Hostname, lowestTableCount, provider.Namespace, provider.Name))
+
+	return nil
 }
 
 // get info for just one of the providers
-func (r *MariaDBConsumerReconciler) getMariaDBProvider(provider *mariadbv1.MariaDBProviderSpec, mariaDBConsumer *mariadbv1.MariaDBConsumer, opLog logr.Logger) error {
+func (r *MariaDBConsumerReconciler) getMariaDBProvider(provider *mariadbv1.MariaDBProviderSpec, mariaDBConsumer *mariadbv1.MariaDBConsumer, ctx context.Context, opLog logr.Logger) error {
 	providers := &mariadbv1.MariaDBProviderList{}
 	src := providers.DeepCopyObject()
 	if err := r.List(context.TODO(), src.(*mariadbv1.MariaDBProviderList)); err != nil {
@@ -635,7 +714,27 @@ func (r *MariaDBConsumerReconciler) getMariaDBProvider(provider *mariadbv1.Maria
 				provider.Hostname = v.Spec.Hostname
 				provider.ReadReplicaHostnames = v.Spec.ReadReplicaHostnames
 				provider.Username = v.Spec.Username
-				provider.Password = v.Spec.Password
+				var password string
+				if v.Spec.PasswordSecretRef != nil {
+					var secret corev1.Secret
+					secretName := types.NamespacedName{
+						Name:      v.Spec.PasswordSecretRef.Name,
+						Namespace: v.Namespace,
+					}
+					err := r.Get(ctx, secretName, &secret)
+					if err != nil {
+						return fmt.Errorf("failed to get Secret %s: %w", secretName.Name, err)
+					}
+
+					val, ok := secret.Data[v.Spec.PasswordSecretRef.Key]
+					if !ok {
+						return fmt.Errorf("key %s not found in Secret %s", v.Spec.PasswordSecretRef.Key, secret.Name)
+					}
+					password = string(val)
+				} else {
+					password = v.Spec.Password
+				}
+				provider.Password = password
 				provider.Port = v.Spec.Port
 				provider.Name = v.Name
 				provider.Namespace = v.Namespace

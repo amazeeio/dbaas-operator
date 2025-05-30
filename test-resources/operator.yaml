@@ -50,8 +50,13 @@ spec:
                 type: string
               mariadb_hostname:
                 type: string
-              mariadb_password:
-                type: string
+              passwordSecretRef:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  key:
+                    type: string
               mariadb_port:
                 type: string
               mariadb_readreplica_hostname:
@@ -117,8 +122,13 @@ spec:
                 type: string
               mariadb_hostname:
                 type: string
-              mariadb_password:
-                type: string
+              passwordSecretRef:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  key:
+                    type: string
               mariadb_port:
                 type: string
               mariadb_readreplica_hostname:

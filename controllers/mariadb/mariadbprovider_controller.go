@@ -17,15 +17,23 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	mariadbv1 "github.com/amazeeio/dbaas-operator/apis/mariadb/v1"
+	corev1 "k8s.io/api/core/v1"
 )
+
+type PasswordSecretRef struct {
+	Name string
+	Key  string
+}
 
 // MariaDBProviderReconciler reconciles a MariaDBProvider object
 type MariaDBProviderReconciler struct {
@@ -36,6 +44,7 @@ type MariaDBProviderReconciler struct {
 	Hostname             string
 	ReadReplicaHostnames []string
 	Password             string
+	PasswordSecretRef    *PasswordSecretRef // Add this field
 	Port                 string
 	Username             string
 	Type                 string
@@ -60,6 +69,28 @@ func (r *MariaDBProviderReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	// 	LabelAppName: mariaDBProvider.ObjectMeta.Name,
 	// 	LabelAppType: "database-provider",
 	// }
+
+	var password string
+	if mariaDBProvider.Spec.PasswordSecretRef != nil {
+		var secret corev1.Secret
+		secretName := types.NamespacedName{
+			Name:      mariaDBProvider.Spec.PasswordSecretRef.Name,
+			Namespace: req.Namespace,
+		}
+		err := r.Get(ctx, secretName, &secret)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to get Secret %s: %w", secretName.Name, err)
+		}
+
+		val, ok := secret.Data[mariaDBProvider.Spec.PasswordSecretRef.Key]
+		if !ok {
+			return ctrl.Result{}, fmt.Errorf("key %s not found in Secret %s", mariaDBProvider.Spec.PasswordSecretRef.Key, secret.Name)
+		}
+		password = string(val)
+	} else {
+		password = mariaDBProvider.Spec.Password
+	}
+	r.Password = password // Optional: make it available on the reconciler
 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if mariaDBProvider.ObjectMeta.DeletionTimestamp.IsZero() {

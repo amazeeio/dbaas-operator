@@ -6,7 +6,9 @@ spec:
   environment: test
   consumer:
     database: testdb
-    password: testdb
+    passwordSecretRef:
+      name: testdb1-secret
+      key: password
     username: testdb
   provider:
     hostname: mariadb.172.17.0.1.nip.io

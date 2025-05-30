@@ -33,12 +33,18 @@ type MariaDBConsumerSpec struct {
 	Consumer    MariaDBConsumerData     `json:"consumer,omitempty"`
 }
 
+type PasswordSecretRef struct {
+	Name string `json:"name,omitempty"`
+	Key  string `json:"key,omitempty"`
+}
+
 // MariaDBConsumerData defines the provider link for this consumer
 type MariaDBConsumerData struct {
-	Database string                  `json:"database,omitempty"`
-	Password string                  `json:"password,omitempty"`
-	Username string                  `json:"username,omitempty"`
-	Services MariaDBConsumerServices `json:"services,omitempty"`
+	Database          string                  `json:"database,omitempty"`
+	Password          string                  `json:"password,omitempty"`
+	PasswordSecretRef *PasswordSecretRef      `json:"passwordSecretRef,omitempty"`
+	Username          string                  `json:"username,omitempty"`
+	Services          MariaDBConsumerServices `json:"services,omitempty"`
 }
 
 // MariaDBConsumerServices defines the provider link for this consumer

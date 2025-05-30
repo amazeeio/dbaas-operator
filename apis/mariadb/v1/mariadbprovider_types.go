@@ -19,6 +19,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type SecretKeyRef struct {
+	Name string `json:"name"`
+	Key  string `json:"key"`
+}
+
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
@@ -28,15 +33,16 @@ type MariaDBProviderSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// These are the spec options for providers
-	Environment          string   `json:"environment,omitempty"`
-	Hostname             string   `json:"hostname,omitempty"`
-	ReadReplicaHostnames []string `json:"readReplicaHostnames,omitempty"`
-	Password             string   `json:"password,omitempty"`
-	Port                 string   `json:"port,omitempty"`
-	Username             string   `json:"user,omitempty"`
-	Type                 string   `json:"type,omitempty"`
-	Name                 string   `json:"name,omitempty"`
-	Namespace            string   `json:"namespace,omitempty"`
+	Environment          string        `json:"environment,omitempty"`
+	Hostname             string        `json:"hostname,omitempty"`
+	ReadReplicaHostnames []string      `json:"readReplicaHostnames,omitempty"`
+	Password             string        `json:"password,omitempty"`
+	PasswordSecretRef    *SecretKeyRef `json:"passwordSecretRef,omitempty"`
+	Port                 string        `json:"port,omitempty"`
+	Username             string        `json:"user,omitempty"`
+	Type                 string        `json:"type,omitempty"`
+	Name                 string        `json:"name,omitempty"`
+	Namespace            string        `json:"namespace,omitempty"`
 }
 
 // MariaDBProviderStatus defines the observed state of MariaDBProvider

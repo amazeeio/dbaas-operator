@@ -1,0 +1,6 @@
+apiVersion: postgres.amazee.io/v1
+kind: PostgreSQLConsumer
+metadata:
+  name: psqlconsumer-testing-fail1
+spec:
+  environment: failure

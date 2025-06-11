@@ -1,6 +1,7 @@
 apiVersion: v2
 name: postgresqlprovider
 description: A Helm chart for PostgreSQLProvider used by dbaas-operator
+kubeVersion: ">= 1.19.0-0"
 
 # A chart can be either an 'application' or a 'library' chart.
 #

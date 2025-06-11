@@ -1,0 +1,6 @@
+apiVersion: mariadb.amazee.io/v1
+kind: MariaDBConsumer
+metadata:
+  name: mariadbconsumer-testing-fail1
+spec:
+  environment: failure

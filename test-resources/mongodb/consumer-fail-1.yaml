@@ -1,0 +1,6 @@
+apiVersion: mongodb.amazee.io/v1
+kind: MongoDBConsumer
+metadata:
+  name: mongodbconsumer-testing-fail1
+spec:
+  environment: failure

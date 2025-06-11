@@ -54,8 +54,8 @@ type MariaDBProviderReconciler struct {
 // +kubebuilder:rbac:groups=mariadb.amazee.io,resources=mariadbproviders/status,verbs=get;update;patch
 
 // Reconcile .
-func (r *MariaDBProviderReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *MariaDBProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// ctx := context.Background()
 	_ = r.Log.WithValues("mariadbprovider", req.NamespacedName)
 
 	var mariaDBProvider mariadbv1.MariaDBProvider

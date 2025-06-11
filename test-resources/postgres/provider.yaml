@@ -1,7 +1,7 @@
 apiVersion: postgres.amazee.io/v1
 kind: PostgreSQLProvider
 metadata:
-  name: postgreprovider-testing
+  name: postgresprovider-testing
 spec:
   environment: test
   hostname: postgres.172.17.0.1.nip.io

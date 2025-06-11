@@ -18,6 +18,7 @@ package controllers
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -67,8 +68,8 @@ const (
 // +kubebuilder:rbac:groups=postgres.amazee.io,resources=postgresqlconsumers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=services,verbs=list;get;watch;create;update;patch;delete
 
-func (r *PostgreSQLConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *PostgreSQLConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// ctx := context.Background()
 	opLog := r.Log.WithValues("postgresqlconsumer", req.NamespacedName)
 
 	var postgresqlConsumer postgresv1.PostgreSQLConsumer
@@ -84,115 +85,147 @@ func (r *PostgreSQLConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result,
 		LabelAppManaged: "dbaas-operator",
 	}
 
-	// examine DeletionTimestamp to determine if object is under deletion
-	if postgresqlConsumer.ObjectMeta.DeletionTimestamp.IsZero() {
-		// set up the new credentials
-		if postgresqlConsumer.Spec.Consumer.Database == "" {
-			postgresqlConsumer.Spec.Consumer.Database = truncateString(req.NamespacedName.Namespace, 50) + "_" + randSeq(5, false)
-		}
-		if postgresqlConsumer.Spec.Consumer.Username == "" {
-			postgresqlConsumer.Spec.Consumer.Username = truncateString(req.NamespacedName.Namespace, 10) + "_" + randSeq(5, false)
-		}
-		if postgresqlConsumer.Spec.Consumer.Password == "" {
-			postgresqlConsumer.Spec.Consumer.Password = randSeq(24, false)
-		}
-		if postgresqlConsumer.Spec.Consumer.Services.Primary == "" {
-			postgresqlConsumer.Spec.Consumer.Services.Primary = truncateString(req.Name, 25) + "-" + uuid.New().String()
-		}
-
-		provider := &postgresv1.PostgreSQLProviderSpec{}
-		// if we haven't got any provider specific information pre-defined, we should query the providers to get one
-		if postgresqlConsumer.Spec.Provider.Hostname == "" || postgresqlConsumer.Spec.Provider.Port == "" {
-			opLog.Info(fmt.Sprintf("Attempting to create database %s on any usable postgresql provider", postgresqlConsumer.Spec.Consumer.Database))
-			// check the providers we have to see who is busy
-			if err := r.checkPostgresSQLProviders(provider, &postgresqlConsumer, req.NamespacedName); err != nil {
-				return ctrl.Result{}, err
+	// check if the consumer is in a failed state, this prevents it from constantly re-trying to provision if its failed.
+	// it also don't be able to be removed if it is in a failed state, as there could be an actual reason
+	// and some human intervention required to prevent possible data loss
+	skip := "false"
+	if val, ok := postgresqlConsumer.ObjectMeta.Annotations["dbaas.amazee.io/failed"]; !ok {
+		skip = val
+	}
+	if skip != "true" {
+		// examine DeletionTimestamp to determine if object is under deletion
+		if postgresqlConsumer.ObjectMeta.DeletionTimestamp.IsZero() {
+			// set up the new credentials
+			if postgresqlConsumer.Spec.Consumer.Database == "" {
+				postgresqlConsumer.Spec.Consumer.Database = truncateString(req.NamespacedName.Namespace, 50) + "_" + randSeq(5, false)
 			}
-			if provider.Hostname == "" {
-				opLog.Info("No suitable postgresql providers found, bailing")
+			if postgresqlConsumer.Spec.Consumer.Username == "" {
+				postgresqlConsumer.Spec.Consumer.Username = truncateString(req.NamespacedName.Namespace, 10) + "_" + randSeq(5, false)
+			}
+			if postgresqlConsumer.Spec.Consumer.Password == "" {
+				postgresqlConsumer.Spec.Consumer.Password = randSeq(24, false)
+			}
+			if postgresqlConsumer.Spec.Consumer.Services.Primary == "" {
+				postgresqlConsumer.Spec.Consumer.Services.Primary = truncateString(req.Name, 25) + "-" + uuid.New().String()
+			}
+
+			provider := &postgresv1.PostgreSQLProviderSpec{}
+			// if we haven't got any provider specific information pre-defined, we should query the providers to get one
+			if postgresqlConsumer.Spec.Provider.Hostname == "" || postgresqlConsumer.Spec.Provider.Port == "" {
+				opLog.Info(fmt.Sprintf("Attempting to create database %s on any usable postgresql provider", postgresqlConsumer.Spec.Consumer.Database))
+				// check the providers we have to see who is busy
+				if err := r.checkPostgresSQLProviders(provider, &postgresqlConsumer, req.NamespacedName); err != nil {
+					opLog.Info(fmt.Sprintf("Error checking the providers in the cluster."))
+					if patchErr := r.patchFailureStatus(ctx, &postgresqlConsumer, fmt.Sprintf("Error checking the providers in the cluster: %v", err), true); patchErr != nil {
+						// if we can't patch the resource, just log it and return
+						// next time it tries to reconcile, it will just exit here without doing anything else
+						opLog.Info(fmt.Sprintf("Unable to patch the postgresqlconsumer with failed status, error was: %v", patchErr))
+					}
+					return ctrl.Result{}, nil
+				}
+				if provider.Hostname == "" {
+					opLog.Info("No suitable postgresql providers found, bailing")
+					return ctrl.Result{}, nil
+				}
+
+				if err := createDatabaseIfNotExist(*provider, postgresqlConsumer); err != nil {
+					opLog.Info("Unable to create database")
+					if patchErr := r.patchFailureStatus(ctx, &postgresqlConsumer, fmt.Sprintf("Unable to create database %v", err), true); patchErr != nil {
+						// if we can't patch the resource, just log it and return
+						// next time it tries to reconcile, it will just exit here without doing anything else
+						opLog.Info(fmt.Sprintf("Unable to patch the postgresqlconsumer with failed status, error was: %v", patchErr))
+					}
+					return ctrl.Result{}, nil
+				}
+
+				// populate with provider host information. we don't expose provider credentials here
+				if postgresqlConsumer.Spec.Provider.Hostname == "" {
+					postgresqlConsumer.Spec.Provider.Hostname = provider.Hostname
+				}
+				if postgresqlConsumer.Spec.Provider.Port == "" {
+					postgresqlConsumer.Spec.Provider.Port = provider.Port
+				}
+				if postgresqlConsumer.Spec.Provider.Name == "" {
+					postgresqlConsumer.Spec.Provider.Name = provider.Name
+				}
+				// some providers need to do special things, like azure
+				switch provider.Type {
+				case "azure":
+					// the hostname can't be more than 60 characters long, we should check this and fail sooner
+					hostName := strings.Split(provider.Hostname, ".")
+					if len(hostName[0]) > 60 {
+						opLog.Error(errors.New("Hostname is too long"), fmt.Sprintf("Hostname %s is longer than 60 characters", hostName[0]))
+						return ctrl.Result{}, errors.New("Hostname is too long")
+					}
+					postgresqlConsumer.Spec.Consumer.Username = postgresqlConsumer.Spec.Consumer.Username + "@" + hostName[0]
+				}
+				if postgresqlConsumer.Spec.Provider.Namespace == "" {
+					postgresqlConsumer.Spec.Provider.Namespace = provider.Namespace
+				}
+			}
+
+			// check if service exists, get if it does, create otherwise
+			service := &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      postgresqlConsumer.Spec.Consumer.Services.Primary,
+					Labels:    labels,
+					Namespace: postgresqlConsumer.ObjectMeta.Namespace,
+				},
+				Spec: corev1.ServiceSpec{
+					ExternalName: postgresqlConsumer.Spec.Provider.Hostname,
+					Type:         corev1.ServiceTypeExternalName,
+				},
+			}
+			err := r.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: service.ObjectMeta.Name}, service)
+			if err != nil {
+				opLog.Info(fmt.Sprintf("Creating service %s in namespace %s", postgresqlConsumer.Spec.Consumer.Services.Primary, postgresqlConsumer.ObjectMeta.Namespace))
+				if err := r.Create(context.Background(), service); err != nil {
+					opLog.Info(fmt.Sprintf("Error creating service %s in namespace %s", postgresqlConsumer.Spec.Consumer.Services.Primary, postgresqlConsumer.ObjectMeta.Namespace))
+					if patchErr := r.patchFailureStatus(ctx, &postgresqlConsumer, fmt.Sprintf("Error creating service %s: %v", postgresqlConsumer.Spec.Consumer.Services.Primary, err), true); patchErr != nil {
+						// if we can't patch the resource, just log it and return
+						// next time it tries to reconcile, it will just exit here without doing anything else
+						opLog.Info(fmt.Sprintf("Unable to patch the postgresqlconsumer with failed status, error was: %v", patchErr))
+					}
+					return ctrl.Result{}, nil
+				}
+			}
+			if err := r.Update(context.Background(), service); err != nil {
+				opLog.Info(fmt.Sprintf("Error updating service %s in namespace %s", postgresqlConsumer.Spec.Consumer.Services.Primary, postgresqlConsumer.ObjectMeta.Namespace))
+				if patchErr := r.patchFailureStatus(ctx, &postgresqlConsumer, fmt.Sprintf("Error updating service %s: %v", postgresqlConsumer.Spec.Consumer.Services.Primary, err), true); patchErr != nil {
+					// if we can't patch the resource, just log it and return
+					// next time it tries to reconcile, it will just exit here without doing anything else
+					opLog.Info(fmt.Sprintf("Unable to patch the postgresqlconsumer with failed status, error was: %v", patchErr))
+				}
 				return ctrl.Result{}, nil
 			}
 
-			if err := createDatabaseIfNotExist(*provider, postgresqlConsumer); err != nil {
-				return ctrl.Result{}, err
-			}
-
-			// populate with provider host information. we don't expose provider credentials here
-			if postgresqlConsumer.Spec.Provider.Hostname == "" {
-				postgresqlConsumer.Spec.Provider.Hostname = provider.Hostname
-			}
-			if postgresqlConsumer.Spec.Provider.Port == "" {
-				postgresqlConsumer.Spec.Provider.Port = provider.Port
-			}
-			if postgresqlConsumer.Spec.Provider.Name == "" {
-				postgresqlConsumer.Spec.Provider.Name = provider.Name
-			}
-			// some providers need to do special things, like azure
-			switch provider.Type {
-			case "azure":
-				// the hostname can't be more than 60 characters long, we should check this and fail sooner
-				hostName := strings.Split(provider.Hostname, ".")
-				if len(hostName[0]) > 60 {
-					opLog.Error(errors.New("Hostname is too long"), fmt.Sprintf("Hostname %s is longer than 60 characters", hostName[0]))
-					return ctrl.Result{}, errors.New("Hostname is too long")
+			// The object is not being deleted, so if it does not have our finalizer,
+			// then lets add the finalizer and update the object. This is equivalent
+			// registering our finalizer.
+			if !containsString(postgresqlConsumer.ObjectMeta.Finalizers, finalizerName) {
+				postgresqlConsumer.ObjectMeta.Finalizers = append(postgresqlConsumer.ObjectMeta.Finalizers, finalizerName)
+				if err := r.Update(context.Background(), &postgresqlConsumer); err != nil {
+					return ctrl.Result{}, err
 				}
-				postgresqlConsumer.Spec.Consumer.Username = postgresqlConsumer.Spec.Consumer.Username + "@" + hostName[0]
 			}
-			if postgresqlConsumer.Spec.Provider.Namespace == "" {
-				postgresqlConsumer.Spec.Provider.Namespace = provider.Namespace
-			}
-		}
+		} else {
+			// The object is being deleted
+			if containsString(postgresqlConsumer.ObjectMeta.Finalizers, finalizerName) {
+				// our finalizer is present, so lets handle any external dependency
+				if err := r.deleteExternalResources(ctx, &postgresqlConsumer, req.NamespacedName.Namespace); err != nil {
+					// if fail to delete the external dependency here, return with error
+					// so that it can be retried
+					return ctrl.Result{}, err
+				}
 
-		// check if service exists, get if it does, create otherwise
-		service := &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      postgresqlConsumer.Spec.Consumer.Services.Primary,
-				Labels:    labels,
-				Namespace: postgresqlConsumer.ObjectMeta.Namespace,
-			},
-			Spec: corev1.ServiceSpec{
-				ExternalName: postgresqlConsumer.Spec.Provider.Hostname,
-				Type:         corev1.ServiceTypeExternalName,
-			},
-		}
-		err := r.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: service.ObjectMeta.Name}, service)
-		if err != nil {
-			opLog.Info(fmt.Sprintf("Creating service %s in namespace %s", postgresqlConsumer.Spec.Consumer.Services.Primary, postgresqlConsumer.ObjectMeta.Namespace))
-			if err := r.Create(context.Background(), service); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-		if err := r.Update(context.Background(), service); err != nil {
-			return ctrl.Result{}, err
-		}
-
-		// The object is not being deleted, so if it does not have our finalizer,
-		// then lets add the finalizer and update the object. This is equivalent
-		// registering our finalizer.
-		if !containsString(postgresqlConsumer.ObjectMeta.Finalizers, finalizerName) {
-			postgresqlConsumer.ObjectMeta.Finalizers = append(postgresqlConsumer.ObjectMeta.Finalizers, finalizerName)
-			if err := r.Update(context.Background(), &postgresqlConsumer); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-	} else {
-		// The object is being deleted
-		if containsString(postgresqlConsumer.ObjectMeta.Finalizers, finalizerName) {
-			// our finalizer is present, so lets handle any external dependency
-			if err := r.deleteExternalResources(&postgresqlConsumer, req.NamespacedName.Namespace); err != nil {
-				// if fail to delete the external dependency here, return with error
-				// so that it can be retried
-				return ctrl.Result{}, err
-			}
-
-			// remove our finalizer from the list and update it.
-			postgresqlConsumer.ObjectMeta.Finalizers = removeString(postgresqlConsumer.ObjectMeta.Finalizers, finalizerName)
-			if err := r.Update(context.Background(), &postgresqlConsumer); err != nil {
-				return ctrl.Result{}, err
+				// remove our finalizer from the list and update it.
+				postgresqlConsumer.ObjectMeta.Finalizers = removeString(postgresqlConsumer.ObjectMeta.Finalizers, finalizerName)
+				if err := r.Update(context.Background(), &postgresqlConsumer); err != nil {
+					return ctrl.Result{}, err
+				}
 			}
 		}
 	}
-
 	return ctrl.Result{}, nil
 }
 
@@ -202,7 +235,7 @@ func (r *PostgreSQLConsumerReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		Complete(r)
 }
 
-func (r *PostgreSQLConsumerReconciler) deleteExternalResources(postgresqlConsumer *postgresv1.PostgreSQLConsumer, namespace string) error {
+func (r *PostgreSQLConsumerReconciler) deleteExternalResources(ctx context.Context, postgresqlConsumer *postgresv1.PostgreSQLConsumer, namespace string) error {
 	opLog := r.Log.WithValues("postgresqlconsumer", namespace)
 	//
 	// delete any external resources associated with the postgresqlconsumer
@@ -215,7 +248,13 @@ func (r *PostgreSQLConsumerReconciler) deleteExternalResources(postgresqlConsume
 		return err
 	}
 	if provider.Hostname == "" {
-		return errors.New("Unable to determine server to deprovision from")
+		opLog.Info(fmt.Sprintf("Unable to determine which server to deprovision from, pausing consumer."))
+		if patchErr := r.patchFailureStatus(ctx, postgresqlConsumer, "Unable to determine which server to deprovision from", true); patchErr != nil {
+			// if we can't patch the resource, just log it and return
+			// next time it tries to reconcile, it will just exit here without doing anything else
+			opLog.Info(fmt.Sprintf("Unable to patch the postgresqlconsumer with failed status, error was: %v", patchErr))
+		}
+		return errors.New("unable to determine which server to deprovision from, pausing consumer")
 	}
 	opLog.Info(fmt.Sprintf("Dropping database %s on host %s - %s/%s", postgresqlConsumer.Spec.Consumer.Database, provider.Hostname, provider.Namespace, provider.Name))
 	if err := dropDbAndUser(*provider, *postgresqlConsumer); err != nil {
@@ -517,4 +556,40 @@ func getPostgresSQLUsage(provider postgresv1.PostgreSQLProviderSpec, opLog logr.
 	}
 
 	return currentUsage, nil
+}
+
+func (r *PostgreSQLConsumerReconciler) patchFailureStatus(
+	ctx context.Context,
+	postgresqlConsumer *postgresv1.PostgreSQLConsumer,
+	reason string,
+	failed bool,
+) error {
+	mergePatch, err := json.Marshal(map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"annotations": map[string]interface{}{
+				"dbaas.amazee.io/failed":        fmt.Sprintf("%v", failed),
+				"dbaas.amazee.io/failed-reason": reason,
+				"dbaas.amazee.io/failed-at":     time.Now().UTC().Format("2006-01-02 15:04:05"),
+			},
+		},
+	})
+	if err != nil {
+		r.Log.WithValues("postgresqlconsumer", types.NamespacedName{
+			Name:      postgresqlConsumer.ObjectMeta.Name,
+			Namespace: postgresqlConsumer.ObjectMeta.Namespace,
+		}).Info(fmt.Sprintf("Unable to create mergepatch for %s, error was: %v", postgresqlConsumer.ObjectMeta.Name, err))
+		return nil
+	}
+	if err := r.Patch(ctx, postgresqlConsumer, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
+		r.Log.WithValues("postgresqlconsumer", types.NamespacedName{
+			Name:      postgresqlConsumer.ObjectMeta.Name,
+			Namespace: postgresqlConsumer.ObjectMeta.Namespace,
+		}).Info(fmt.Sprintf("Unable to patch postgresqlconsumer %s, error was: %v", postgresqlConsumer.ObjectMeta.Name, err))
+		return nil
+	}
+	r.Log.WithValues("postgresqlconsumer", types.NamespacedName{
+		Name:      postgresqlConsumer.ObjectMeta.Name,
+		Namespace: postgresqlConsumer.ObjectMeta.Namespace,
+	}).Info(fmt.Sprintf("Patched postgresqlconsumer %s", postgresqlConsumer.ObjectMeta.Name))
+	return nil
 }

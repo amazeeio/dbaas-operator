@@ -10,7 +10,6 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.2.4
-  creationTimestamp: null
   name: mariadbconsumers.mariadb.amazee.io
 spec:
   group: mariadb.amazee.io
@@ -80,7 +79,6 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.2.4
-  creationTimestamp: null
   name: mariadbproviders.mariadb.amazee.io
 spec:
   group: mariadb.amazee.io
@@ -114,8 +112,13 @@ spec:
               type: string
             mariadb_hostname:
               type: string
-            mariadb_password:
-              type: string
+            passwordSecretRef:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  key:
+                    type: string
             mariadb_port:
               type: string
             mariadb_readreplica_hostname:
@@ -175,7 +178,6 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  creationTimestamp: null
   name: dbaas-operator-manager-role
 rules:
 - apiGroups:

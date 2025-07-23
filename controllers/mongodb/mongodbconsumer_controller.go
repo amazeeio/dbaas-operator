@@ -519,6 +519,12 @@ func (r *MongoDBConsumerReconciler) checkMongoDBProviders(provider *MongoDBProvi
 	var nameSpaceName string
 	lowestTableCount := -1
 	for _, v := range providersList.Items {
+		if noProvision, ok := v.Labels["dbaas.amazee.io/no-provision"]; ok {
+			if noProvision == "true" {
+				// don't provision against this provider
+				continue
+			}
+		}
 		if v.Spec.Environment == mongoDBConsumer.Spec.Environment {
 			// Form a temporary connection object.
 			mDBProvider := MongoDBProviderInfo{

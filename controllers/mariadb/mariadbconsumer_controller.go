@@ -573,6 +573,12 @@ func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *mariadbv1.Ma
 	var nameSpaceName string
 	lowestTableCount := -1
 	for _, v := range providersList.Items {
+		if noProvision, ok := v.Labels["dbaas.amazee.io/no-provision"]; ok {
+			if noProvision == "true" {
+				// don't provision against this provider
+				continue
+			}
+		}
 		if v.Spec.Environment == mariaDBConsumer.Spec.Environment {
 			// Form a temporary connection object.
 			mDBProvider := mariadbv1.MariaDBProviderSpec{

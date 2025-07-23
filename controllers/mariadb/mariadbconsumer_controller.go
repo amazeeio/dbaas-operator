@@ -137,11 +137,11 @@ func (r *MariaDBConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				opLog.Info(fmt.Sprintf("Attempting to create database %s on any usable mariadb provider", mariaDBConsumer.Spec.Consumer.Database))
 				// check the providers we have to see who is busy
 				if err := r.checkMariaDBProviders(provider, &mariaDBConsumer, req.NamespacedName); err != nil {
-					opLog.Info(fmt.Sprintf("Error checking the providers in the cluster."))
+					opLog.Info("Error checking the providers in the cluster.")
 					if patchErr := r.patchFailureStatus(ctx, &mariaDBConsumer, fmt.Sprintf("Error checking the providers in the cluster: %v", err), true); patchErr != nil {
 						// if we can't patch the resource, just log it and return
 						// next time it tries to reconcile, it will just exit here without doing anything else
-						opLog.Info(fmt.Sprintf("Unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
+						opLog.Info(fmt.Sprintf("unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
 					}
 					return ctrl.Result{}, nil
 				}
@@ -164,19 +164,17 @@ func (r *MariaDBConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 					hostName := strings.Split(provider.Hostname, ".")
 					if len(hostName[0]) > 60 {
 						opLog.Info(fmt.Sprintf("Hostname %s is longer than 60 characters", hostName[0]))
-						if patchErr := r.patchFailureStatus(ctx, &mariaDBConsumer, fmt.Sprintf("Hostname %s is longer than 60 characters: %v", hostName[0], errors.New("Hostname is too long")), true); patchErr != nil {
+						if patchErr := r.patchFailureStatus(ctx, &mariaDBConsumer, fmt.Sprintf("Hostname %s is longer than 60 characters: %v", hostName[0], errors.New("hostname is too long")), true); patchErr != nil {
 							// if we can't patch the resource, just log it and return
 							// next time it tries to reconcile, it will just exit here without doing anything else
-							opLog.Info(fmt.Sprintf("Unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
+							opLog.Info(fmt.Sprintf("unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
 						}
 						return ctrl.Result{}, nil
 					}
 					mariaDBConsumer.Spec.Consumer.Username = mariaDBConsumer.Spec.Consumer.Username + "@" + hostName[0]
 				}
 				if len(mariaDBConsumer.Spec.Provider.ReadReplicaHostnames) == 0 {
-					for _, replica := range provider.ReadReplicaHostnames {
-						mariaDBConsumer.Spec.Provider.ReadReplicaHostnames = append(mariaDBConsumer.Spec.Provider.ReadReplicaHostnames, replica)
-					}
+					mariaDBConsumer.Spec.Provider.ReadReplicaHostnames = append(mariaDBConsumer.Spec.Provider.ReadReplicaHostnames, provider.ReadReplicaHostnames...)
 				}
 				if mariaDBConsumer.Spec.Provider.Name == "" {
 					mariaDBConsumer.Spec.Provider.Name = provider.Name
@@ -188,11 +186,11 @@ func (r *MariaDBConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				// once we have all the consumer and provider info, attempt to create the consumer user and database
 				opLog.Info(fmt.Sprintf("Proceeding to create database %s on %s/%s for user %s", mariaDBConsumer.Spec.Consumer.Database, provider.Namespace, provider.Name, mariaDBConsumer.Spec.Consumer.Username))
 				if err := createDatabaseIfNotExist(*provider, mariaDBConsumer); err != nil {
-					opLog.Info("Unable to create database")
-					if patchErr := r.patchFailureStatus(ctx, &mariaDBConsumer, fmt.Sprintf("Unable to create database %v", err), true); patchErr != nil {
+					opLog.Info("unable to create database")
+					if patchErr := r.patchFailureStatus(ctx, &mariaDBConsumer, fmt.Sprintf("unable to create database %v", err), true); patchErr != nil {
 						// if we can't patch the resource, just log it and return
 						// next time it tries to reconcile, it will just exit here without doing anything else
-						opLog.Info(fmt.Sprintf("Unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
+						opLog.Info(fmt.Sprintf("unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
 					}
 					return ctrl.Result{}, nil
 				}
@@ -219,7 +217,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 					if patchErr := r.patchFailureStatus(ctx, &mariaDBConsumer, fmt.Sprintf("Error creating service %s: %v", mariaDBConsumer.Spec.Consumer.Services.Primary, err), true); patchErr != nil {
 						// if we can't patch the resource, just log it and return
 						// next time it tries to reconcile, it will just exit here without doing anything else
-						opLog.Info(fmt.Sprintf("Unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
+						opLog.Info(fmt.Sprintf("unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
 					}
 					return ctrl.Result{}, nil
 				}
@@ -229,7 +227,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				if patchErr := r.patchFailureStatus(ctx, &mariaDBConsumer, fmt.Sprintf("Error updating service %s: %v", mariaDBConsumer.Spec.Consumer.Services.Primary, err), true); patchErr != nil {
 					// if we can't patch the resource, just log it and return
 					// next time it tries to reconcile, it will just exit here without doing anything else
-					opLog.Info(fmt.Sprintf("Unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
+					opLog.Info(fmt.Sprintf("unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
 				}
 				return ctrl.Result{}, nil
 			}
@@ -257,7 +255,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 							if patchErr := r.patchFailureStatus(ctx, &mariaDBConsumer, fmt.Sprintf("Error creating service %s: %v", replicaName, err), true); patchErr != nil {
 								// if we can't patch the resource, just log it and return
 								// next time it tries to reconcile, it will just exit here without doing anything else
-								opLog.Info(fmt.Sprintf("Unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
+								opLog.Info(fmt.Sprintf("unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
 							}
 							return ctrl.Result{}, nil
 						}
@@ -267,7 +265,7 @@ func (r *MariaDBConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 						if patchErr := r.patchFailureStatus(ctx, &mariaDBConsumer, fmt.Sprintf("Error updating service %s: %v", replicaName, err), true); patchErr != nil {
 							// if we can't patch the resource, just log it and return
 							// next time it tries to reconcile, it will just exit here without doing anything else
-							opLog.Info(fmt.Sprintf("Unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
+							opLog.Info(fmt.Sprintf("unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
 						}
 						return ctrl.Result{}, nil
 					}
@@ -321,27 +319,29 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(ctx context.Context,
 	// Ensure that delete implementation is idempotent and safe to invoke
 	// multiple types for same object.
 	// check the providers we have
-	provider := &mariadbv1.MariaDBProviderSpec{}
-	if err := r.getMariaDBProvider(provider, mariaDBConsumer, opLog); err != nil {
-		return err
-	}
-	if provider.Hostname == "" {
-		// if we can't determine the server to deprovision from
-		opLog.Info(fmt.Sprintf("Unable to determine which server to deprovision from, pausing consumer."))
-		if patchErr := r.patchFailureStatus(ctx, mariaDBConsumer, "Unable to determine which server to deprovision from", true); patchErr != nil {
-			// if we can't patch the resource, just log it and return
-			// next time it tries to reconcile, it will just exit here without doing anything else
-			opLog.Info(fmt.Sprintf("Unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
-		}
-		return errors.New("unable to determine which server to deprovision from, pausing consumer")
-	}
-	opLog.Info(fmt.Sprintf("Dropping database %s on host %s - %s/%s", mariaDBConsumer.Spec.Consumer.Database, provider.Hostname, provider.Namespace, provider.Name))
-	if err := dropDbAndUser(*provider, *mariaDBConsumer); err != nil {
-		// If the database doesn't exist, then we can still continue deprovisioning.
-		if strings.Contains(err.Error(), "database doesn't exist") {
-			opLog.Info(fmt.Sprintf("Error dropping database: %v, continuing with deprovisioning.", err))
-		} else {
+	if _, ok := mariaDBConsumer.ObjectMeta.Labels["dbaas.amazee.io/no-drop-database"]; !ok {
+		provider := &mariadbv1.MariaDBProviderSpec{}
+		if err := r.getMariaDBProvider(provider, mariaDBConsumer, opLog); err != nil {
 			return err
+		}
+		if provider.Hostname == "" {
+			// if we can't determine the server to deprovision from
+			opLog.Info("unable to determine which server to deprovision from, pausing consumer.")
+			if patchErr := r.patchFailureStatus(ctx, mariaDBConsumer, "Unable to determine which server to deprovision from", true); patchErr != nil {
+				// if we can't patch the resource, just log it and return
+				// next time it tries to reconcile, it will just exit here without doing anything else
+				opLog.Info(fmt.Sprintf("unable to patch the mariadbconsumer with failed status, error was: %v", patchErr))
+			}
+			return errors.New("unable to determine which server to deprovision from, pausing consumer")
+		}
+		opLog.Info(fmt.Sprintf("Dropping database %s on host %s - %s/%s", mariaDBConsumer.Spec.Consumer.Database, provider.Hostname, provider.Namespace, provider.Name))
+		if err := dropDbAndUser(*provider, *mariaDBConsumer); err != nil {
+			// If the database doesn't exist, then we can still continue deprovisioning.
+			if strings.Contains(err.Error(), "database doesn't exist") {
+				opLog.Info(fmt.Sprintf("Error dropping database: %v, continuing with deprovisioning.", err))
+			} else {
+				return err
+			}
 		}
 	}
 	// Delete the primary
@@ -353,7 +353,7 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(ctx context.Context,
 	}
 	opLog.Info(fmt.Sprintf("Deleting service %s in namespace %s", service.ObjectMeta.Name, service.ObjectMeta.Namespace))
 	if err := r.Delete(context.TODO(), service); ignoreNotFound(err) != nil {
-		return fmt.Errorf("Unable to delete service %s in %s: %v", service.ObjectMeta.Name, service.ObjectMeta.Namespace, err)
+		return fmt.Errorf("unable to delete service %s in %s: %v", service.ObjectMeta.Name, service.ObjectMeta.Namespace, err)
 	}
 	// Delete the read replicas
 	for _, replica := range mariaDBConsumer.Spec.Consumer.Services.Replicas {
@@ -365,7 +365,7 @@ func (r *MariaDBConsumerReconciler) deleteExternalResources(ctx context.Context,
 		}
 		opLog.Info(fmt.Sprintf("Deleting service %s in namespace %s", serviceRR.ObjectMeta.Name, serviceRR.ObjectMeta.Namespace))
 		if err := r.Delete(context.TODO(), serviceRR); ignoreNotFound(err) != nil {
-			return fmt.Errorf("Unable to delete service %s in %s: %v", serviceRR.ObjectMeta.Name, serviceRR.ObjectMeta.Namespace, err)
+			return fmt.Errorf("unable to delete service %s in %s: %v", serviceRR.ObjectMeta.Name, serviceRR.ObjectMeta.Namespace, err)
 		}
 	}
 	return nil
@@ -401,14 +401,14 @@ func randSeq(n int, dns bool) string {
 func createDatabaseIfNotExist(provider mariadbv1.MariaDBProviderSpec, consumer mariadbv1.MariaDBConsumer) error {
 	db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
 	if err != nil {
-		return fmt.Errorf("Unable to connect to provider: %v", err)
+		return fmt.Errorf("unable to connect to provider: %v", err)
 	}
 	defer db.Close()
 
 	createDB := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`;", consumer.Spec.Consumer.Database)
 	_, err = db.Exec(createDB)
 	if err != nil {
-		return fmt.Errorf("Unable create database: %v", err)
+		return fmt.Errorf("unable create database: %v", err)
 	}
 	var createUser string
 	switch provider.Type {
@@ -424,9 +424,9 @@ func createDatabaseIfNotExist(provider mariadbv1.MariaDBProviderSpec, consumer m
 		// if user creation fails, drop the database that gets created
 		dropErr := dropDatabase(db, consumer.Spec.Consumer.Database)
 		if dropErr != nil {
-			return fmt.Errorf("Unable drop database after failed user creation: %v", dropErr)
+			return fmt.Errorf("unable drop database after failed user creation: %v", dropErr)
 		}
-		return fmt.Errorf("Unable to create user %s, dropped database %s: %v", consumer.Spec.Consumer.Username, consumer.Spec.Consumer.Database, err)
+		return fmt.Errorf("unable to create user %s, dropped database %s: %v", consumer.Spec.Consumer.Username, consumer.Spec.Consumer.Database, err)
 	}
 	var grantUser string
 	switch provider.Type {
@@ -442,17 +442,17 @@ func createDatabaseIfNotExist(provider mariadbv1.MariaDBProviderSpec, consumer m
 		// if grants fails, drop the database and user that gets created
 		dropErr := dropDatabase(db, consumer.Spec.Consumer.Database)
 		if dropErr != nil {
-			return fmt.Errorf("Unable drop database after failed user grant: %v", dropErr)
+			return fmt.Errorf("unable drop database after failed user grant: %v", dropErr)
 		}
 		dropErr = dropUser(db, consumer, provider)
 		if dropErr != nil {
-			return fmt.Errorf("Unable drop user after failed user grant: %v", dropErr)
+			return fmt.Errorf("unable drop user after failed user grant: %v", dropErr)
 		}
-		return fmt.Errorf("Unable to grant user %s permissions on database %s: %v", consumer.Spec.Consumer.Username, consumer.Spec.Consumer.Database, err)
+		return fmt.Errorf("unable to grant user %s permissions on database %s: %v", consumer.Spec.Consumer.Username, consumer.Spec.Consumer.Database, err)
 	}
 	_, err = db.Exec("FLUSH PRIVILEGES;")
 	if err != nil {
-		return fmt.Errorf("Unable flush privileges: %v", err)
+		return fmt.Errorf("unable flush privileges: %v", err)
 	}
 	return nil
 }
@@ -460,21 +460,21 @@ func createDatabaseIfNotExist(provider mariadbv1.MariaDBProviderSpec, consumer m
 func dropDbAndUser(provider mariadbv1.MariaDBProviderSpec, consumer mariadbv1.MariaDBConsumer) error {
 	db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
 	if err != nil {
-		return fmt.Errorf("Unable to connect to provider: %v", err)
+		return fmt.Errorf("unable to connect to provider: %v", err)
 	}
 	defer db.Close()
 
 	err = dropDatabase(db, consumer.Spec.Consumer.Database)
 	if err != nil {
-		return fmt.Errorf("Unable drop database %s: %v", consumer.Spec.Consumer.Database, err)
+		return fmt.Errorf("unable drop database %s: %v", consumer.Spec.Consumer.Database, err)
 	}
 	err = dropUser(db, consumer, provider)
 	if err != nil {
-		return fmt.Errorf("Unable drop user %s: %v", consumer.Spec.Consumer.Username, err)
+		return fmt.Errorf("unable drop user %s: %v", consumer.Spec.Consumer.Username, err)
 	}
 	_, err = db.Exec("FLUSH PRIVILEGES;")
 	if err != nil {
-		return fmt.Errorf("Unable flush privileges: %v", err)
+		return fmt.Errorf("unable flush privileges: %v", err)
 	}
 	return nil
 }
@@ -514,7 +514,7 @@ func getMariaDBUsage(provider mariadbv1.MariaDBProviderSpec, opLog logr.Logger) 
 
 	db, err := sql.Open("mysql", provider.Username+":"+provider.Password+"@tcp("+provider.Hostname+":"+provider.Port+")/")
 	if err != nil {
-		return currentUsage, fmt.Errorf("Unable to connect to %s using %s: %v", provider.Hostname, provider.Username, err)
+		return currentUsage, fmt.Errorf("unable to connect to %s using %s: %v", provider.Hostname, provider.Username, err)
 	}
 	defer db.Close()
 	var tableCountQuery = `SELECT COUNT(1) AS TableCount
@@ -522,13 +522,13 @@ func getMariaDBUsage(provider mariadbv1.MariaDBProviderSpec, opLog logr.Logger) 
 	WHERE table_schema NOT IN ('information_schema','mysql', 'sys');`
 	result, err := db.Query(tableCountQuery)
 	if err != nil {
-		return currentUsage, fmt.Errorf("Unable to execute query %s on %s: %v", tableCountQuery, provider.Hostname, err)
+		return currentUsage, fmt.Errorf("unable to execute query %s on %s: %v", tableCountQuery, provider.Hostname, err)
 	}
 	for result.Next() {
 		var value int
 		err = result.Scan(&value)
 		if err != nil {
-			return currentUsage, fmt.Errorf("Unable to scan results for query %s on %s: %v", tableCountQuery, provider.Hostname, err)
+			return currentUsage, fmt.Errorf("unable to scan results for query %s on %s: %v", tableCountQuery, provider.Hostname, err)
 		}
 		opLog.Info(fmt.Sprintf("Table count on host %s has reached %v - %s/%s", provider.Hostname, value, provider.Namespace, provider.Name))
 		currentUsage.TableCount = value
@@ -539,13 +539,13 @@ func getMariaDBUsage(provider mariadbv1.MariaDBProviderSpec, opLog logr.Logger) 
 	WHERE schema_name NOT IN ('information_schema','mysql', 'sys');`
 	result, err = db.Query(schemaCountQuery)
 	if err != nil {
-		return currentUsage, fmt.Errorf("Unable to execute query %s on %s: %v", schemaCountQuery, provider.Hostname, err)
+		return currentUsage, fmt.Errorf("unable to execute query %s on %s: %v", schemaCountQuery, provider.Hostname, err)
 	}
 	for result.Next() {
 		var value int
 		err = result.Scan(&value)
 		if err != nil {
-			return currentUsage, fmt.Errorf("Unable to scan results for query %s on %s: %v", schemaCountQuery, provider.Hostname, err)
+			return currentUsage, fmt.Errorf("unable to scan results for query %s on %s: %v", schemaCountQuery, provider.Hostname, err)
 		}
 		opLog.Info(fmt.Sprintf("Schema count on host %s has reached %v - %s/%s", provider.Hostname, value, provider.Namespace, provider.Name))
 		currentUsage.SchemaCount = value
@@ -560,7 +560,7 @@ func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *mariadbv1.Ma
 	providers := &mariadbv1.MariaDBProviderList{}
 	src := providers.DeepCopyObject()
 	if err := r.List(context.TODO(), src.(*mariadbv1.MariaDBProviderList)); err != nil {
-		return fmt.Errorf("Unable to list providers in the cluster, there may be none or something went wrong: %v", err)
+		return fmt.Errorf("unable to list providers in the cluster, there may be none or something went wrong: %v", err)
 	}
 	providersList := src.(*mariadbv1.MariaDBProviderList)
 
@@ -592,7 +592,7 @@ func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *mariadbv1.Ma
 			}
 			currentUsage, err := getMariaDBUsage(mDBProvider, r.Log.WithValues("mariadbconsumer", namespaceName))
 			if err != nil {
-				return fmt.Errorf("Unable to get provider usage, something went wrong: %v", err)
+				return fmt.Errorf("unable to get provider usage, something went wrong: %v", err)
 			}
 
 			if lowestTableCount < 0 || currentUsage.TableCount < lowestTableCount {
@@ -624,7 +624,7 @@ func (r *MariaDBConsumerReconciler) checkMariaDBProviders(provider *mariadbv1.Ma
 		}
 	}
 
-	return errors.New("No suitable usable database servers")
+	return errors.New("no suitable usable database servers")
 }
 
 // get info for just one of the providers
@@ -632,7 +632,7 @@ func (r *MariaDBConsumerReconciler) getMariaDBProvider(provider *mariadbv1.Maria
 	providers := &mariadbv1.MariaDBProviderList{}
 	src := providers.DeepCopyObject()
 	if err := r.List(context.TODO(), src.(*mariadbv1.MariaDBProviderList)); err != nil {
-		return fmt.Errorf("Unable to list providers in the cluster, there may be none or something went wrong: %v", err)
+		return fmt.Errorf("unable to list providers in the cluster, there may be none or something went wrong: %v", err)
 	}
 	providersList := src.(*mariadbv1.MariaDBProviderList)
 	for _, v := range providersList.Items {
@@ -671,14 +671,14 @@ func (r *MariaDBConsumerReconciler) patchFailureStatus(
 		r.Log.WithValues("mariadbconsumer", types.NamespacedName{
 			Name:      mariaDBConsumer.ObjectMeta.Name,
 			Namespace: mariaDBConsumer.ObjectMeta.Namespace,
-		}).Info(fmt.Sprintf("Unable to create mergepatch for %s, error was: %v", mariaDBConsumer.ObjectMeta.Name, err))
+		}).Info(fmt.Sprintf("unable to create mergepatch for %s, error was: %v", mariaDBConsumer.ObjectMeta.Name, err))
 		return nil
 	}
 	if err := r.Patch(ctx, mariaDBConsumer, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 		r.Log.WithValues("mariadbconsumer", types.NamespacedName{
 			Name:      mariaDBConsumer.ObjectMeta.Name,
 			Namespace: mariaDBConsumer.ObjectMeta.Namespace,
-		}).Info(fmt.Sprintf("Unable to patch mariadbconsumer %s, error was: %v", mariaDBConsumer.ObjectMeta.Name, err))
+		}).Info(fmt.Sprintf("unable to patch mariadbconsumer %s, error was: %v", mariaDBConsumer.ObjectMeta.Name, err))
 		return nil
 	}
 	r.Log.WithValues("mariadbconsumer", types.NamespacedName{

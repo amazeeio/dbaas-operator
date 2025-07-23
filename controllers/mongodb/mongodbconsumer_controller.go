@@ -137,11 +137,11 @@ func (r *MongoDBConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				opLog.Info(fmt.Sprintf("Attempting to create database %s on any usable mongodb provider", mongodbConsumer.Spec.Consumer.Database))
 				// check the providers we have to see who is busy
 				if err := r.checkMongoDBProviders(provider, &mongodbConsumer, req.NamespacedName); err != nil {
-					opLog.Info(fmt.Sprintf("Error checking the providers in the cluster."))
-					if patchErr := r.patchFailureStatus(ctx, &mongodbConsumer, fmt.Sprintf("Error checking the providers in the cluster: %v", err), true); patchErr != nil {
+					opLog.Info("Error checking the providers in the cluster.")
+					if patchErr := r.patchFailureStatus(ctx, &mongodbConsumer, fmt.Sprintf("error checking the providers in the cluster: %v", err), true); patchErr != nil {
 						// if we can't patch the resource, just log it and return
 						// next time it tries to reconcile, it will just exit here without doing anything else
-						opLog.Info(fmt.Sprintf("Unable to patch the mongodbconsumer with failed status, error was: %v", patchErr))
+						opLog.Info(fmt.Sprintf("unable to patch the mongodbconsumer with failed status, error was: %v", patchErr))
 					}
 					return ctrl.Result{}, nil
 				}
@@ -157,11 +157,11 @@ func (r *MongoDBConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				}
 
 				if err := createDatabaseIfNotExist(*provider, consumer); err != nil {
-					opLog.Info("Unable to create database")
-					if patchErr := r.patchFailureStatus(ctx, &mongodbConsumer, fmt.Sprintf("Unable to create database %v", err), true); patchErr != nil {
+					opLog.Info("unable to create database")
+					if patchErr := r.patchFailureStatus(ctx, &mongodbConsumer, fmt.Sprintf("unable to create database %v", err), true); patchErr != nil {
 						// if we can't patch the resource, just log it and return
 						// next time it tries to reconcile, it will just exit here without doing anything else
-						opLog.Info(fmt.Sprintf("Unable to patch the mongodbconsumer with failed status, error was: %v", patchErr))
+						opLog.Info(fmt.Sprintf("unable to patch the mongodbconsumer with failed status, error was: %v", patchErr))
 					}
 					return ctrl.Result{}, nil
 				}
@@ -199,21 +199,21 @@ func (r *MongoDBConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			if err != nil {
 				opLog.Info(fmt.Sprintf("Creating service %s in namespace %s", mongodbConsumer.Spec.Consumer.Services.Primary, mongodbConsumer.ObjectMeta.Namespace))
 				if err := r.Create(context.Background(), service); err != nil {
-					opLog.Info(fmt.Sprintf("Error creating service %s in namespace %s", mongodbConsumer.Spec.Consumer.Services.Primary, mongodbConsumer.ObjectMeta.Namespace))
-					if patchErr := r.patchFailureStatus(ctx, &mongodbConsumer, fmt.Sprintf("Error creating service %s: %v", mongodbConsumer.Spec.Consumer.Services.Primary, err), true); patchErr != nil {
+					opLog.Info(fmt.Sprintf("error creating service %s in namespace %s", mongodbConsumer.Spec.Consumer.Services.Primary, mongodbConsumer.ObjectMeta.Namespace))
+					if patchErr := r.patchFailureStatus(ctx, &mongodbConsumer, fmt.Sprintf("error creating service %s: %v", mongodbConsumer.Spec.Consumer.Services.Primary, err), true); patchErr != nil {
 						// if we can't patch the resource, just log it and return
 						// next time it tries to reconcile, it will just exit here without doing anything else
-						opLog.Info(fmt.Sprintf("Unable to patch the mongodbconsumer with failed status, error was: %v", patchErr))
+						opLog.Info(fmt.Sprintf("unable to patch the mongodbconsumer with failed status, error was: %v", patchErr))
 					}
 					return ctrl.Result{}, nil
 				}
 			}
 			if err := r.Update(context.Background(), service); err != nil {
-				opLog.Info(fmt.Sprintf("Error updating service %s in namespace %s", mongodbConsumer.Spec.Consumer.Services.Primary, mongodbConsumer.ObjectMeta.Namespace))
-				if patchErr := r.patchFailureStatus(ctx, &mongodbConsumer, fmt.Sprintf("Error updating service %s: %v", mongodbConsumer.Spec.Consumer.Services.Primary, err), true); patchErr != nil {
+				opLog.Info(fmt.Sprintf("error updating service %s in namespace %s", mongodbConsumer.Spec.Consumer.Services.Primary, mongodbConsumer.ObjectMeta.Namespace))
+				if patchErr := r.patchFailureStatus(ctx, &mongodbConsumer, fmt.Sprintf("error updating service %s: %v", mongodbConsumer.Spec.Consumer.Services.Primary, err), true); patchErr != nil {
 					// if we can't patch the resource, just log it and return
 					// next time it tries to reconcile, it will just exit here without doing anything else
-					opLog.Info(fmt.Sprintf("Unable to patch the mongodbconsumer with failed status, error was: %v", patchErr))
+					opLog.Info(fmt.Sprintf("unable to patch the mongodbconsumer with failed status, error was: %v", patchErr))
 				}
 				return ctrl.Result{}, nil
 			}
@@ -263,27 +263,29 @@ func (r *MongoDBConsumerReconciler) deleteExternalResources(ctx context.Context,
 	// Ensure that delete implementation is idempotent and safe to invoke
 	// multiple types for same object.
 	// check the providers we have to see who is busy
-	provider := &MongoDBProviderInfo{}
-	if err := r.getMongoDBProvider(provider, mongodbConsumer); err != nil {
-		return err
-	}
-	if provider.Hostname == "" {
-		opLog.Info(fmt.Sprintf("Unable to determine which server to deprovision from, pausing consumer."))
-		if patchErr := r.patchFailureStatus(ctx, mongodbConsumer, "Unable to determine which server to deprovision from", true); patchErr != nil {
-			// if we can't patch the resource, just log it and return
-			// next time it tries to reconcile, it will just exit here without doing anything else
-			opLog.Info(fmt.Sprintf("Unable to patch the mongodbconsumer with failed status, error was: %v", patchErr))
+	if _, ok := mongodbConsumer.ObjectMeta.Labels["dbaas.amazee.io/no-drop-database"]; !ok {
+		provider := &MongoDBProviderInfo{}
+		if err := r.getMongoDBProvider(provider, mongodbConsumer); err != nil {
+			return err
 		}
-		return errors.New("unable to determine which server to deprovision from, pausing consumer")
-	}
-	consumer := MongoDBConsumerInfo{
-		DatabaseName: mongodbConsumer.Spec.Consumer.Database,
-		Username:     mongodbConsumer.Spec.Consumer.Username,
-		Password:     mongodbConsumer.Spec.Consumer.Password,
-	}
-	opLog.Info(fmt.Sprintf("Dropping database %s on host %s - %s/%s", consumer.DatabaseName, provider.Hostname, provider.Namespace, provider.Name))
-	if err := dropDatabase(*provider, consumer); err != nil {
-		return err
+		if provider.Hostname == "" {
+			opLog.Info("unable to determine which server to deprovision from, pausing consumer.")
+			if patchErr := r.patchFailureStatus(ctx, mongodbConsumer, "Unable to determine which server to deprovision from", true); patchErr != nil {
+				// if we can't patch the resource, just log it and return
+				// next time it tries to reconcile, it will just exit here without doing anything else
+				opLog.Info(fmt.Sprintf("unable to patch the mongodbconsumer with failed status, error was: %v", patchErr))
+			}
+			return errors.New("unable to determine which server to deprovision from, pausing consumer")
+		}
+		consumer := MongoDBConsumerInfo{
+			DatabaseName: mongodbConsumer.Spec.Consumer.Database,
+			Username:     mongodbConsumer.Spec.Consumer.Username,
+			Password:     mongodbConsumer.Spec.Consumer.Password,
+		}
+		opLog.Info(fmt.Sprintf("Dropping database %s on host %s - %s/%s", consumer.DatabaseName, provider.Hostname, provider.Namespace, provider.Name))
+		if err := dropDatabase(*provider, consumer); err != nil {
+			return err
+		}
 	}
 	// Delete the primary
 	service := &corev1.Service{
@@ -376,13 +378,13 @@ func createDatabaseIfNotExist(provider MongoDBProviderInfo, consumer MongoDBCons
 	// Connect to MongoDB
 	client, err := mongo.Connect(context.Background(), options.MergeClientOptions(options.Client().ApplyURI(connURL), clientOptions))
 	if err != nil {
-		return fmt.Errorf("Error creating client: %v", err)
+		return fmt.Errorf("error creating client: %v", err)
 	}
 
 	// Check the connection
 	err = client.Ping(context.Background(), readpref.Primary())
 	if err != nil {
-		return fmt.Errorf("Error pinging server: %v", err)
+		return fmt.Errorf("error pinging server: %v", err)
 	}
 
 	// create the user
@@ -398,20 +400,20 @@ func createDatabaseIfNotExist(provider MongoDBProviderInfo, consumer MongoDBCons
 			},
 		}).Err()
 	if err != nil {
-		return fmt.Errorf("Error running user creation: %v", err)
+		return fmt.Errorf("error running user creation: %v", err)
 	}
 	// create a lagoon collection in the database (to create the database)
 	lagoonCollection := client.Database(consumer.DatabaseName).Collection("lagoon")
 	_, err = lagoonCollection.InsertOne(context.Background(), bson.M{"name": "Lagoon"})
 	if err != nil {
-		return fmt.Errorf("Error inserting database: %v", err)
+		return fmt.Errorf("error inserting database: %v", err)
 	}
 
 	// Close the connection once no longer needed
 	err = client.Disconnect(context.Background())
 
 	if err != nil {
-		return fmt.Errorf("Error disconnecting: %v", err)
+		return fmt.Errorf("error disconnecting: %v", err)
 	}
 	// disconnected from mongo
 	return nil
@@ -441,13 +443,13 @@ func dropDatabase(provider MongoDBProviderInfo, consumer MongoDBConsumerInfo) er
 	// Connect to MongoDB
 	client, err := mongo.Connect(context.Background(), options.MergeClientOptions(options.Client().ApplyURI(connURL), clientOptions))
 	if err != nil {
-		return fmt.Errorf("Error creating client: %v", err)
+		return fmt.Errorf("error creating client: %v", err)
 	}
 
 	// Check the connection
 	err = client.Ping(context.Background(), readpref.Primary())
 	if err != nil {
-		return fmt.Errorf("Error pinging server: %v", err)
+		return fmt.Errorf("error pinging server: %v", err)
 	}
 
 	// drop the user
@@ -459,19 +461,19 @@ func dropDatabase(provider MongoDBProviderInfo, consumer MongoDBConsumerInfo) er
 		},
 	).Err()
 	if err != nil {
-		return fmt.Errorf("Error dropping user: %v", err)
+		return fmt.Errorf("error dropping user: %v", err)
 	}
 	// drop the database
 	err = client.Database(consumer.DatabaseName).Drop(context.Background())
 	if err != nil {
-		return fmt.Errorf("Error dropping database: %v", err)
+		return fmt.Errorf("error dropping database: %v", err)
 	}
 
 	// Close the connection once no longer needed
 	err = client.Disconnect(context.Background())
 
 	if err != nil {
-		return fmt.Errorf("Error disconnecting: %v", err)
+		return fmt.Errorf("error disconnecting: %v", err)
 	}
 	// disconnected from mongo
 	return nil
@@ -570,7 +572,7 @@ func (r *MongoDBConsumerReconciler) checkMongoDBProviders(provider *MongoDBProvi
 		}
 	}
 
-	return errors.New("No suitable usable database servers")
+	return errors.New("no suitable usable database servers")
 }
 
 // check the usage of the mongodb provider and return true/false if we can use it
@@ -604,14 +606,14 @@ func (r *MongoDBConsumerReconciler) patchFailureStatus(
 		r.Log.WithValues("mongodbconsumer", types.NamespacedName{
 			Name:      mongoDBConsumer.ObjectMeta.Name,
 			Namespace: mongoDBConsumer.ObjectMeta.Namespace,
-		}).Info(fmt.Sprintf("Unable to create mergepatch for %s, error was: %v", mongoDBConsumer.ObjectMeta.Name, err))
+		}).Info(fmt.Sprintf("unable to create mergepatch for %s, error was: %v", mongoDBConsumer.ObjectMeta.Name, err))
 		return nil
 	}
 	if err := r.Patch(ctx, mongoDBConsumer, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 		r.Log.WithValues("mongodbconsumer", types.NamespacedName{
 			Name:      mongoDBConsumer.ObjectMeta.Name,
 			Namespace: mongoDBConsumer.ObjectMeta.Namespace,
-		}).Info(fmt.Sprintf("Unable to patch mongodbconsumer %s, error was: %v", mongoDBConsumer.ObjectMeta.Name, err))
+		}).Info(fmt.Sprintf("unable to patch mongodbconsumer %s, error was: %v", mongoDBConsumer.ObjectMeta.Name, err))
 		return nil
 	}
 	r.Log.WithValues("mongodbconsumer", types.NamespacedName{

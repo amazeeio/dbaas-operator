@@ -115,11 +115,11 @@ func (r *PostgreSQLConsumerReconciler) Reconcile(ctx context.Context, req ctrl.R
 				opLog.Info(fmt.Sprintf("Attempting to create database %s on any usable postgresql provider", postgresqlConsumer.Spec.Consumer.Database))
 				// check the providers we have to see who is busy
 				if err := r.checkPostgresSQLProviders(provider, &postgresqlConsumer, req.NamespacedName); err != nil {
-					opLog.Info(fmt.Sprintf("Error checking the providers in the cluster."))
+					opLog.Info("Error checking the providers in the cluster.")
 					if patchErr := r.patchFailureStatus(ctx, &postgresqlConsumer, fmt.Sprintf("Error checking the providers in the cluster: %v", err), true); patchErr != nil {
 						// if we can't patch the resource, just log it and return
 						// next time it tries to reconcile, it will just exit here without doing anything else
-						opLog.Info(fmt.Sprintf("Unable to patch the postgresqlconsumer with failed status, error was: %v", patchErr))
+						opLog.Info(fmt.Sprintf("unable to patch the postgresqlconsumer with failed status, error was: %v", patchErr))
 					}
 					return ctrl.Result{}, nil
 				}
@@ -129,11 +129,11 @@ func (r *PostgreSQLConsumerReconciler) Reconcile(ctx context.Context, req ctrl.R
 				}
 
 				if err := createDatabaseIfNotExist(*provider, postgresqlConsumer); err != nil {
-					opLog.Info("Unable to create database")
-					if patchErr := r.patchFailureStatus(ctx, &postgresqlConsumer, fmt.Sprintf("Unable to create database %v", err), true); patchErr != nil {
+					opLog.Info("unable to create database")
+					if patchErr := r.patchFailureStatus(ctx, &postgresqlConsumer, fmt.Sprintf("unable to create database %v", err), true); patchErr != nil {
 						// if we can't patch the resource, just log it and return
 						// next time it tries to reconcile, it will just exit here without doing anything else
-						opLog.Info(fmt.Sprintf("Unable to patch the postgresqlconsumer with failed status, error was: %v", patchErr))
+						opLog.Info(fmt.Sprintf("unable to patch the postgresqlconsumer with failed status, error was: %v", patchErr))
 					}
 					return ctrl.Result{}, nil
 				}
@@ -154,8 +154,8 @@ func (r *PostgreSQLConsumerReconciler) Reconcile(ctx context.Context, req ctrl.R
 					// the hostname can't be more than 60 characters long, we should check this and fail sooner
 					hostName := strings.Split(provider.Hostname, ".")
 					if len(hostName[0]) > 60 {
-						opLog.Error(errors.New("Hostname is too long"), fmt.Sprintf("Hostname %s is longer than 60 characters", hostName[0]))
-						return ctrl.Result{}, errors.New("Hostname is too long")
+						opLog.Error(errors.New("hostname is too long"), fmt.Sprintf("Hostname %s is longer than 60 characters", hostName[0]))
+						return ctrl.Result{}, errors.New("hostname is too long")
 					}
 					postgresqlConsumer.Spec.Consumer.Username = postgresqlConsumer.Spec.Consumer.Username + "@" + hostName[0]
 				}
@@ -184,7 +184,7 @@ func (r *PostgreSQLConsumerReconciler) Reconcile(ctx context.Context, req ctrl.R
 					if patchErr := r.patchFailureStatus(ctx, &postgresqlConsumer, fmt.Sprintf("Error creating service %s: %v", postgresqlConsumer.Spec.Consumer.Services.Primary, err), true); patchErr != nil {
 						// if we can't patch the resource, just log it and return
 						// next time it tries to reconcile, it will just exit here without doing anything else
-						opLog.Info(fmt.Sprintf("Unable to patch the postgresqlconsumer with failed status, error was: %v", patchErr))
+						opLog.Info(fmt.Sprintf("unable to patch the postgresqlconsumer with failed status, error was: %v", patchErr))
 					}
 					return ctrl.Result{}, nil
 				}
@@ -194,7 +194,7 @@ func (r *PostgreSQLConsumerReconciler) Reconcile(ctx context.Context, req ctrl.R
 				if patchErr := r.patchFailureStatus(ctx, &postgresqlConsumer, fmt.Sprintf("Error updating service %s: %v", postgresqlConsumer.Spec.Consumer.Services.Primary, err), true); patchErr != nil {
 					// if we can't patch the resource, just log it and return
 					// next time it tries to reconcile, it will just exit here without doing anything else
-					opLog.Info(fmt.Sprintf("Unable to patch the postgresqlconsumer with failed status, error was: %v", patchErr))
+					opLog.Info(fmt.Sprintf("unable to patch the postgresqlconsumer with failed status, error was: %v", patchErr))
 				}
 				return ctrl.Result{}, nil
 			}
@@ -243,22 +243,24 @@ func (r *PostgreSQLConsumerReconciler) deleteExternalResources(ctx context.Conte
 	// Ensure that delete implementation is idempotent and safe to invoke
 	// multiple types for same object.
 	// check the providers we have to see who is busy
-	provider := &postgresv1.PostgreSQLProviderSpec{}
-	if err := r.getPostgresSQLProvider(provider, postgresqlConsumer); err != nil {
-		return err
-	}
-	if provider.Hostname == "" {
-		opLog.Info(fmt.Sprintf("Unable to determine which server to deprovision from, pausing consumer."))
-		if patchErr := r.patchFailureStatus(ctx, postgresqlConsumer, "Unable to determine which server to deprovision from", true); patchErr != nil {
-			// if we can't patch the resource, just log it and return
-			// next time it tries to reconcile, it will just exit here without doing anything else
-			opLog.Info(fmt.Sprintf("Unable to patch the postgresqlconsumer with failed status, error was: %v", patchErr))
+	if _, ok := postgresqlConsumer.ObjectMeta.Labels["dbaas.amazee.io/no-drop-database"]; !ok {
+		provider := &postgresv1.PostgreSQLProviderSpec{}
+		if err := r.getPostgresSQLProvider(provider, postgresqlConsumer); err != nil {
+			return err
 		}
-		return errors.New("unable to determine which server to deprovision from, pausing consumer")
-	}
-	opLog.Info(fmt.Sprintf("Dropping database %s on host %s - %s/%s", postgresqlConsumer.Spec.Consumer.Database, provider.Hostname, provider.Namespace, provider.Name))
-	if err := dropDbAndUser(*provider, *postgresqlConsumer); err != nil {
-		return err
+		if provider.Hostname == "" {
+			opLog.Info("unable to determine which server to deprovision from, pausing consumer.")
+			if patchErr := r.patchFailureStatus(ctx, postgresqlConsumer, "Unable to determine which server to deprovision from", true); patchErr != nil {
+				// if we can't patch the resource, just log it and return
+				// next time it tries to reconcile, it will just exit here without doing anything else
+				opLog.Info(fmt.Sprintf("unable to patch the postgresqlconsumer with failed status, error was: %v", patchErr))
+			}
+			return errors.New("unable to determine which server to deprovision from, pausing consumer")
+		}
+		opLog.Info(fmt.Sprintf("Dropping database %s on host %s - %s/%s", postgresqlConsumer.Spec.Consumer.Database, provider.Hostname, provider.Namespace, provider.Name))
+		if err := dropDbAndUser(*provider, *postgresqlConsumer); err != nil {
+			return err
+		}
 	}
 	// Delete the primary
 	service := &corev1.Service{
@@ -348,31 +350,29 @@ func createDatabaseIfNotExist(provider postgresv1.PostgreSQLProviderSpec, consum
 		return err
 	}
 	// @TODO: check the equivalent of of create if not exists
-	var createUser string
-	createUser = fmt.Sprintf("CREATE USER \"%s\" WITH ENCRYPTED PASSWORD '%s';", userName[0], consumer.Spec.Consumer.Password)
+	createUser := fmt.Sprintf("CREATE USER \"%s\" WITH ENCRYPTED PASSWORD '%s';", userName[0], consumer.Spec.Consumer.Password)
 	_, err = db.Exec(createUser)
 	if err != nil {
 		// if user creation fails, drop the database that gets created
 		dropErr := dropDatabase(db, consumer.Spec.Consumer.Database)
 		if dropErr != nil {
-			return fmt.Errorf("Unable drop database after failed user creation: %v", dropErr)
+			return fmt.Errorf("unable drop database after failed user creation: %v", dropErr)
 		}
-		return fmt.Errorf("Unable to create user %s, dropped database %s: %v", consumer.Spec.Consumer.Username, consumer.Spec.Consumer.Database, err)
+		return fmt.Errorf("unable to create user %s, dropped database %s: %v", consumer.Spec.Consumer.Username, consumer.Spec.Consumer.Database, err)
 	}
-	var grantUser string
-	grantUser = fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE \"%s\" TO \"%s\";", consumer.Spec.Consumer.Database, userName[0])
+	grantUser := fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE \"%s\" TO \"%s\";", consumer.Spec.Consumer.Database, userName[0])
 	_, err = db.Exec(grantUser)
 	if err != nil {
 		// if grants fails, drop the database and user that gets created
 		dropErr := dropDatabase(db, consumer.Spec.Consumer.Database)
 		if dropErr != nil {
-			return fmt.Errorf("Unable drop database after failed user grant: %v", dropErr)
+			return fmt.Errorf("unable drop database after failed user grant: %v", dropErr)
 		}
 		dropErr = dropUser(db, consumer, provider)
 		if dropErr != nil {
-			return fmt.Errorf("Unable drop user after failed user grant: %v", dropErr)
+			return fmt.Errorf("unable drop user after failed user grant: %v", dropErr)
 		}
-		return fmt.Errorf("Unable to grant user %s permissions on database %s: %v", userName[0], consumer.Spec.Consumer.Database, err)
+		return fmt.Errorf("unable to grant user %s permissions on database %s: %v", userName[0], consumer.Spec.Consumer.Database, err)
 	}
 	return nil
 }
@@ -382,17 +382,17 @@ func dropDbAndUser(provider postgresv1.PostgreSQLProviderSpec, consumer postgres
 	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s "+"password=%s dbname=%s sslmode=%s", provider.Hostname, provider.Port, provider.Username, provider.Password, "postgres", sslMode)
 	db, err := sql.Open("postgres", psqlInfo)
 	if err != nil {
-		return fmt.Errorf("Unable to connect to provider: %v", err)
+		return fmt.Errorf("unable to connect to provider: %v", err)
 	}
 	defer db.Close()
 
 	err = dropDatabase(db, consumer.Spec.Consumer.Database)
 	if err != nil {
-		return fmt.Errorf("Unable drop database %s: %v", consumer.Spec.Consumer.Database, err)
+		return fmt.Errorf("unable drop database %s: %v", consumer.Spec.Consumer.Database, err)
 	}
 	err = dropUser(db, consumer, provider)
 	if err != nil {
-		return fmt.Errorf("Unable drop user %s: %v", consumer.Spec.Consumer.Username, err)
+		return fmt.Errorf("unable drop user %s: %v", consumer.Spec.Consumer.Username, err)
 	}
 	return nil
 }
@@ -413,8 +413,7 @@ func dropUser(db *sql.DB, consumer postgresv1.PostgreSQLConsumer, provider postg
 		userName = strings.Split(consumer.Spec.Consumer.Username, "@")
 	}
 
-	var dropUser string
-	dropUser = fmt.Sprintf("DROP USER \"%s\";", userName[0])
+	dropUser := fmt.Sprintf("DROP USER \"%s\";", userName[0])
 	_, err := db.Exec(dropUser)
 	if err != nil {
 		return err
@@ -513,7 +512,7 @@ func (r *PostgreSQLConsumerReconciler) checkPostgresSQLProviders(provider *postg
 		}
 	}
 
-	return errors.New("No suitable usable database servers")
+	return errors.New("no suitable usable database servers")
 }
 
 // check the usage of the postgresql provider and return true/false if we can use it
@@ -583,14 +582,14 @@ func (r *PostgreSQLConsumerReconciler) patchFailureStatus(
 		r.Log.WithValues("postgresqlconsumer", types.NamespacedName{
 			Name:      postgresqlConsumer.ObjectMeta.Name,
 			Namespace: postgresqlConsumer.ObjectMeta.Namespace,
-		}).Info(fmt.Sprintf("Unable to create mergepatch for %s, error was: %v", postgresqlConsumer.ObjectMeta.Name, err))
+		}).Info(fmt.Sprintf("unable to create mergepatch for %s, error was: %v", postgresqlConsumer.ObjectMeta.Name, err))
 		return nil
 	}
 	if err := r.Patch(ctx, postgresqlConsumer, client.RawPatch(types.MergePatchType, mergePatch)); err != nil {
 		r.Log.WithValues("postgresqlconsumer", types.NamespacedName{
 			Name:      postgresqlConsumer.ObjectMeta.Name,
 			Namespace: postgresqlConsumer.ObjectMeta.Namespace,
-		}).Info(fmt.Sprintf("Unable to patch postgresqlconsumer %s, error was: %v", postgresqlConsumer.ObjectMeta.Name, err))
+		}).Info(fmt.Sprintf("unable to patch postgresqlconsumer %s, error was: %v", postgresqlConsumer.ObjectMeta.Name, err))
 		return nil
 	}
 	r.Log.WithValues("postgresqlconsumer", types.NamespacedName{

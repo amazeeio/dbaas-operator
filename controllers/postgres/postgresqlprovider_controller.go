@@ -17,13 +17,14 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
+	postgresv1 "github.com/amazeeio/dbaas-operator/apis/postgres/v1"
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	postgresv1 "github.com/amazeeio/dbaas-operator/apis/postgres/v1"
 )
 
 // PostgreSQLProviderReconciler reconciles a PostgreSQLProvider object
@@ -46,7 +47,20 @@ func (r *PostgreSQLProviderReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 	// your logic here
 	finalizerName := "finalizer.provider.postgres.amazee.io/v1"
-
+	// Resolve password from secret if specified
+	if postgresqlProvider.Spec.PasswordSecretRef != nil {
+		secretRef := postgresqlProvider.Spec.PasswordSecretRef
+		var secret corev1.Secret
+		secretKey := client.ObjectKey{Name: secretRef.Name, Namespace: req.Namespace}
+		if err := r.Get(ctx, secretKey, &secret); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to get secret %s: %w", secretRef.Name, err)
+		}
+		password, ok := secret.Data[secretRef.Key]
+		if !ok {
+			return ctrl.Result{}, fmt.Errorf("key %s not found in secret %s", secretRef.Key, secretRef.Name)
+		}
+		postgresqlProvider.Spec.Password = string(password)
+	}
 	// examine DeletionTimestamp to determine if object is under deletion
 	if postgresqlProvider.ObjectMeta.DeletionTimestamp.IsZero() {
 		// The object is not being deleted, so if it does not have our finalizer,

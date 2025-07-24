@@ -7,7 +7,12 @@ metadata:
 spec:
   environment: {{ $providerConfig.environment | quote }}
   hostname:  {{ $providerConfig.hostname | quote }}
+  passwordSecretRef:
+    name: {{ $providerConfig.passwordSecretRef.name | quote }}
+    key: {{ $providerConfig.passwordSecretRef.key | quote }}
+  {{- else if $providerConfig.password }}
   password: {{ $providerConfig.password | quote }}
+  {{- end }}
   port: {{ $providerConfig.port | quote }}
   user: {{ $providerConfig.user | quote }}
   type: {{ $providerConfig.type | quote | default "generic" }}

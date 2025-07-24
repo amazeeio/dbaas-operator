@@ -16,6 +16,14 @@ rules:
   - update
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - mariadb.amazee.io
   resources:
   - mariadbconsumers

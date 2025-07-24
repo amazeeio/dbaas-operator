@@ -17,13 +17,14 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
+	mongodbv1 "github.com/amazeeio/dbaas-operator/apis/mongodb/v1"
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	mongodbv1 "github.com/amazeeio/dbaas-operator/apis/mongodb/v1"
 )
 
 // MongoDBProviderReconciler reconciles a MongoDBProvider object
@@ -37,14 +38,38 @@ type MongoDBProviderReconciler struct {
 // +kubebuilder:rbac:groups=mongodb.amazee.io,resources=mongodbproviders/status,verbs=get;update;patch
 
 // Reconcile .
-func (r *MongoDBProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	// ctx := context.Background()
-	_ = r.Log.WithValues("mongodbprovider", req.NamespacedName)
+func (r *MongoDBProviderReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+	ctx := context.Background()
 
 	var mongodbProvider mongodbv1.MongoDBProvider
 	if err := r.Get(ctx, req.NamespacedName, &mongodbProvider); err != nil {
 		return ctrl.Result{}, ignoreNotFound(err)
 	}
+
+	var password string
+	if mongodbProvider.Spec.PasswordSecretRef != nil {
+		var secret corev1.Secret
+		secretName := mongodbProvider.Spec.PasswordSecretRef.Name
+		secretKey := mongodbProvider.Spec.PasswordSecretRef.Key
+
+		if err := r.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: secretName}, &secret); err != nil {
+			fmt.Printf("failed to get password secret %q: %v\n", secretName, err)
+			return ctrl.Result{}, err
+		}
+
+		pwBytes, found := secret.Data[secretKey]
+		if !found {
+			err := fmt.Errorf("password key %q not found in secret %q", secretKey, secretName)
+			fmt.Printf("error reading secret key: secretName=%q, secretKey=%q, error=%v\n", secretName, secretKey, err)
+			return ctrl.Result{}, err
+		}
+
+		password = string(pwBytes)
+	} else {
+		password = mongodbProvider.Spec.Password
+	}
+	// if there is no password in secret, use password as string
+	_ = password
 	// your logic here
 	finalizerName := "finalizer.provider.mongodb.amazee.io/v1"
 

@@ -1,9 +1,7 @@
-
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  creationTimestamp: null
   name: manager-role
 rules:
 - apiGroups:
@@ -22,25 +20,6 @@ rules:
   - mariadb.amazee.io
   resources:
   - mariadbconsumers
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - mariadb.amazee.io
-  resources:
-  - mariadbconsumers/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - mariadb.amazee.io
-  resources:
   - mariadbproviders
   verbs:
   - create
@@ -53,6 +32,7 @@ rules:
 - apiGroups:
   - mariadb.amazee.io
   resources:
+  - mariadbconsumers/status
   - mariadbproviders/status
   verbs:
   - get
@@ -62,25 +42,6 @@ rules:
   - mongodb.amazee.io
   resources:
   - mongodbconsumers
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - mongodb.amazee.io
-  resources:
-  - mongodbconsumers/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - mongodb.amazee.io
-  resources:
   - mongodbproviders
   verbs:
   - create
@@ -93,6 +54,7 @@ rules:
 - apiGroups:
   - mongodb.amazee.io
   resources:
+  - mongodbconsumers/status
   - mongodbproviders/status
   verbs:
   - get
@@ -102,25 +64,6 @@ rules:
   - postgres.amazee.io
   resources:
   - postgresqlconsumers
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - postgres.amazee.io
-  resources:
-  - postgresqlconsumers/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - postgres.amazee.io
-  resources:
   - postgresqlproviders
   verbs:
   - create
@@ -133,6 +76,7 @@ rules:
 - apiGroups:
   - postgres.amazee.io
   resources:
+  - postgresqlconsumers/status
   - postgresqlproviders/status
   verbs:
   - get

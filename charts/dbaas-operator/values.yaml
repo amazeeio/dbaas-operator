@@ -11,9 +11,9 @@ image:
 
 kubeRbacProxy:
   image:
-    repository: bitnami/kube-rbac-proxy
+    repository: quay.io/brancz/kube-rbac-proxy
     pullPolicy: IfNotPresent
-    tag: 0.18.2
+    tag: v0.18.2
 
 imagePullSecrets: []
 nameOverride: ""

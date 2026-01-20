@@ -22,19 +22,25 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+type SecretKeyRef struct {
+	Name string `json:"name"`
+	Key  string `json:"key"`
+}
+
 // MongoDBProviderSpec defines the desired state of MongoDBProvider
 type MongoDBProviderSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// These are the spec options for providers
-	Environment string      `json:"environment,omitempty"`
-	Hostname    string      `json:"hostname,omitempty"`
-	Password    string      `json:"password,omitempty"`
-	Port        string      `json:"port,omitempty"`
-	Username    string      `json:"user,omitempty"`
-	Auth        MongoDBAuth `json:"auth,omitempty"`
-	Type        string      `json:"type,omitempty"`
+	Environment       string        `json:"environment,omitempty"`
+	Hostname          string        `json:"hostname,omitempty"`
+	Password          string        `json:"password,omitempty"`
+	PasswordSecretRef *SecretKeyRef `json:"passwordSecretRef,omitempty"`
+	Port              string        `json:"port,omitempty"`
+	Username          string        `json:"user,omitempty"`
+	Auth              MongoDBAuth   `json:"auth,omitempty"`
+	Type              string        `json:"type,omitempty"`
 }
 
 // MongoDBAuth defines the authorisation mechanisms that mongo can use

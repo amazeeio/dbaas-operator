@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"slices"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -337,12 +338,7 @@ func ignoreNotFound(err error) error {
 
 // Helper functions to check and remove string from a slice of strings.
 func containsString(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(slice, s)
 }
 
 func removeString(slice []string, s string) (result []string) {
@@ -593,9 +589,9 @@ func (r *MongoDBConsumerReconciler) patchFailureStatus(
 	reason string,
 	failed bool,
 ) error {
-	mergePatch, err := json.Marshal(map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"annotations": map[string]interface{}{
+	mergePatch, err := json.Marshal(map[string]any{
+		"metadata": map[string]any{
+			"annotations": map[string]any{
 				"dbaas.amazee.io/failed":        fmt.Sprintf("%v", failed),
 				"dbaas.amazee.io/failed-reason": reason,
 				"dbaas.amazee.io/failed-at":     time.Now().UTC().Format("2006-01-02 15:04:05"),

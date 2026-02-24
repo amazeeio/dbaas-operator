@@ -9,12 +9,7 @@ MAGENTA='\033[1;35m'
 POSTGRES_VERSION=$(cat test-resources/Dockerfile.postgres | grep FROM | awk '{print $2}')
 MONGODB_VERSION=$(cat test-resources/Dockerfile.mongo | grep FROM | awk '{print $2}')
 
-KIND_VER=v1.19.11
-#KIND_VER=v1.20.7
-#KIND_VER=v1.21.1
-#KIND_VER=v1.22.0
-# or get the latest tagged version of a specific k8s version of kind
-#KIND_VER=$(curl -s https://hub.docker.com/v2/repositories/kindest/node/tags | jq -r '.results | .[].name' | grep 'v1.17' | sort -Vr | head -1)
+KIND_VER=v1.32.2@sha256:f226345927d7e348497136874b6d207e0b32cc52154ad8323129352923a3142f
 KIND_NAME=chart-testing
 OPERATOR_IMAGE=amazeeio/dbaas-operator:test-tag
 CHECK_TIMEOUT=10

@@ -30,7 +30,7 @@ jobs:
     - name: Setup correct Go version
       uses: actions/setup-go@v5
       with:
-        go-version: '1.16'
+        go-version: '1.26'
     - name: Install kustomize, kubebuilder, helm
       run: |
         #kustomize

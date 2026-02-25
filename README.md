@@ -36,15 +36,6 @@ make clean
 
 * located in `config/samples`
 
-# Updating Helm Charts
-
-* Update Helmchart and increase version in `Chart.yaml` and `values.yaml` as required
-* run `helm package charts/dbaas-operator -d charts/`
-* run `helm package charts/mariadbprovider -d charts/`
-* run `helm package charts/postgresqlprovider -d charts/`
-* run `helm package charts/mongodbprovider -d charts/`
-* run `helm repo index charts`
-
 # Developing
 ## Install Kubebuilder
 ```
@@ -58,13 +49,4 @@ curl -L https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.2.0/
 # (you'll need to set the KUBEBUILDER_ASSETS env var if you put it somewhere else)
 sudo mv /tmp/kubebuilder_2.2.0_${os}_${arch} /usr/local/kubebuilder
 export PATH=$PATH:/usr/local/kubebuilder/bin
-```
-
-# Other
-## Dashboard
-```
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.0-beta6/aio/deploy/recommended.yaml
-kubectl apply -f test-resources/dashboard-rbac.yaml
-kubectl -n kubernetes-dashboard describe secret $(kubectl -n kubernetes-dashboard get secret | grep admin-user | awk '{print $1}')
-kubectl proxy
 ```

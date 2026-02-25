@@ -3,7 +3,7 @@ kind: Namespace
 metadata:
   labels:
     control-plane: controller-manager
-  name: dbaas-operator-system
+  name: dbaas-operator
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -141,7 +141,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: dbaas-operator-leader-election-role
-  namespace: dbaas-operator-system
+  namespace: dbaas-operator
 rules:
 - apiGroups:
   - ""
@@ -263,7 +263,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: dbaas-operator-leader-election-rolebinding
-  namespace: dbaas-operator-system
+  namespace: dbaas-operator
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -271,7 +271,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: default
-  namespace: dbaas-operator-system
+  namespace: dbaas-operator
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -284,7 +284,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: default
-  namespace: dbaas-operator-system
+  namespace: dbaas-operator
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -297,7 +297,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: default
-  namespace: dbaas-operator-system
+  namespace: dbaas-operator
 ---
 apiVersion: v1
 kind: Service
@@ -305,7 +305,7 @@ metadata:
   labels:
     control-plane: controller-manager
   name: dbaas-operator-controller-manager-metrics-service
-  namespace: dbaas-operator-system
+  namespace: dbaas-operator
 spec:
   ports:
   - name: https
@@ -320,7 +320,7 @@ metadata:
   labels:
     control-plane: controller-manager
   name: dbaas-operator-controller-manager
-  namespace: dbaas-operator-system
+  namespace: dbaas-operator
 spec:
   replicas: 1
   selector:

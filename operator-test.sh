@@ -16,7 +16,7 @@ CHECK_TIMEOUT=10
 
 check_operator_log () {
   echo -e "${GREEN}========= FULL OPERATOR LOG =========${NOCOLOR}"
-  kubectl logs $(kubectl get pods  -n dbaas-operator-system --no-headers | awk '{print $1}') -c manager -n dbaas-operator-system
+  kubectl logs $(kubectl get pods  -n dbaas-operator --no-headers | awk '{print $1}') -c manager -n dbaas-operator
 }
 
 postgres_start_check () {
@@ -121,7 +121,7 @@ build_deploy_operator () {
 
   CHECK_COUNTER=1
   echo -e "${GREEN}==>${NOCOLOR} Ensure operator is running"
-  until $(kubectl get pods  -n dbaas-operator-system --no-headers | grep -q "Running")
+  until $(kubectl get pods  -n dbaas-operator --no-headers | grep -q "Running")
   do
   if [ $CHECK_COUNTER -lt $CHECK_TIMEOUT ]; then
     let CHECK_COUNTER=CHECK_COUNTER+1
@@ -448,7 +448,7 @@ build_deploy_operator
 echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Check provider"
 echo "Test checking the dbaas-operator http handler for a specific environment type."
 echo "This test should return found true or false, true if there are any usable providers, false if there are none"
-DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator-system.svc:5000/mariadb/non-existent)
+DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator.svc:5000/mariadb/non-existent)
 if [ "$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)" != "false" ]; then
     echo "provider http check returned found when it should have been not found"
     check_operator_log
@@ -465,7 +465,7 @@ kubectl apply -f test-resources/mariadb/provider.yaml
 echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Check provider"
 echo "Test checking the dbaas-operator http handler for a specific environment type."
 echo "This test should return found true or false, true if there are any usable providers, false if there are none"
-DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator-system.svc:5000/mariadb/test)
+DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator.svc:5000/mariadb/test)
 if [ "$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)" != "true" ]; then
     R_ERROR=$(echo ${DBAAS_HTTP_RESULT} | jq -r .error)
     echo "provider http check returned not found when it should have been found: ${R_ERROR}"
@@ -511,7 +511,7 @@ kubectl apply -f test-resources/mariadb/provider-azure.yaml
 echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Check provider"
 echo "Test checking the dbaas-operator http handler for a specific environment type."
 echo "This test should return found true or false, true if there are any usable providers, false if there are none"
-DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator-system.svc:5000/mariadb/azure)
+DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator.svc:5000/mariadb/azure)
 if [ "$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)" != "true" ]; then
     R_ERROR=$(echo ${DBAAS_HTTP_RESULT} | jq -r .error)
     echo "provider http check returned not found when it should have been found: ${R_ERROR}"
@@ -537,7 +537,7 @@ kubectl apply -f test-resources/mariadb/provider-multi.yaml
 echo -e "${GREEN}==>${YELLOW}MariaDB: ${NOCOLOR} Check provider"
 echo "Test checking the dbaas-operator http handler for a specific environment type."
 echo "This test should return found true or false, true if there are any usable providers, false if there are none"
-DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator-system.svc:5000/mariadb/multi)
+DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator.svc:5000/mariadb/multi)
 if [ "$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)" != "true" ]; then
     R_ERROR=$(echo ${DBAAS_HTTP_RESULT} | jq -r .error)
     echo "provider http check returned not found when it should have been found: ${R_ERROR}"
@@ -601,7 +601,7 @@ kubectl get postgresqlprovider/postgresprovider-testing -o yaml
 echo -e "${GREEN}==>${LIGHTBLUE}PostgreSQL: ${NOCOLOR} Check provider"
 echo "Test checking the dbaas-operator http handler for a specific environment type."
 echo "This test should return found true or false, true if there are any usable providers, false if there are none"
-DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator-system.svc:5000/postgres/test)
+DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator.svc:5000/postgres/test)
 if [ "$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)" != "true" ]; then
     R_ERROR=$(echo ${DBAAS_HTTP_RESULT} | jq -r .error)
     echo "provider http check returned not found when it should have been found: ${R_ERROR}"
@@ -631,7 +631,7 @@ kubectl get mongodbprovider/mongodbprovider-testing -o yaml
 echo -e "${GREEN}==>${MAGENTA}MongoDB: ${NOCOLOR} Check provider"
 echo "Test checking the dbaas-operator http handler for a specific environment type."
 echo "This test should return found true or false, true if there are any usable providers, false if there are none"
-DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator-system.svc:5000/mongodb/test)
+DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator.svc:5000/mongodb/test)
 if [ "$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)" != "true" ]; then
     R_ERROR=$(echo ${DBAAS_HTTP_RESULT} | jq -r .error)
     echo "provider http check returned not found when it should have been found: ${R_ERROR}"
@@ -661,7 +661,7 @@ kubectl get mongodbprovider/mongodbprovider-tls-testing -o yaml
 echo -e "${GREEN}==>${MAGENTA}MongoDB: ${NOCOLOR} Check provider"
 echo "Test checking the dbaas-operator http handler for a specific environment type."
 echo "This test should return found true or false, true if there are any usable providers, false if there are none"
-DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator-system.svc:5000/mongodb/tls-test)
+DBAAS_HTTP_RESULT=$(kubectl exec -it busybox -- wget -q -O - http://dbaas-operator-controller-backend.dbaas-operator.svc:5000/mongodb/tls-test)
 if [ "$(echo ${DBAAS_HTTP_RESULT} | jq -r .result.found)" != "true" ]; then
     R_ERROR=$(echo ${DBAAS_HTTP_RESULT} | jq -r .error)
     echo "provider http check returned not found when it should have been found: ${R_ERROR}"

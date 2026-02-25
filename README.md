@@ -20,15 +20,6 @@ It allows for provisiong and deprovisioning of shared MySQL/MariaDB, PostgreSQL,
 ## Test It Out
 This will spin up a local mysql, postgresql, and mongodb provider. A kind cluster is started, and the operator is installed, then some basic tests are performed to confirm the providers and consumer provisioning and deprovisioning is successful.
 
-### Using circleci locally
-Install the `circleci` tool locally and run the following
-
-```
-make local-circle
-# or
-circleci build -v $(pwd):/workdir
-```
-
 ### Running the tests directly
 ```
 make operator-test

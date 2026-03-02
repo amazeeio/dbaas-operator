@@ -658,9 +658,9 @@ func (r *MariaDBConsumerReconciler) patchFailureStatus(
 	reason string,
 	failed bool,
 ) error {
-	mergePatch, err := json.Marshal(map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"annotations": map[string]interface{}{
+	mergePatch, err := json.Marshal(map[string]any{
+		"metadata": map[string]any{
+			"annotations": map[string]any{
 				"dbaas.amazee.io/failed":        fmt.Sprintf("%v", failed),
 				"dbaas.amazee.io/failed-reason": reason,
 				"dbaas.amazee.io/failed-at":     time.Now().UTC().Format("2006-01-02 15:04:05"),

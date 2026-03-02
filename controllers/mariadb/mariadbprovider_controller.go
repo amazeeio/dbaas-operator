@@ -17,6 +17,7 @@ package controllers
 
 import (
 	"context"
+	"slices"
 
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -109,12 +110,7 @@ func (r *MariaDBProviderReconciler) deleteExternalResources(mariaDBProvider *mar
 
 // Helper functions to check and remove string from a slice of strings.
 func containsString(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(slice, s)
 }
 
 func removeString(slice []string, s string) (result []string) {

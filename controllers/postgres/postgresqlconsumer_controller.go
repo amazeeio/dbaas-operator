@@ -339,52 +339,33 @@ func createDatabaseIfNotExist(provider postgresv1.PostgreSQLProviderSpec, consum
 	case "azure":
 		userName = strings.Split(consumer.Spec.Consumer.Username, "@")
 	}
-	// @TODO: check the equivalent of of create if not exists
-	createDB := fmt.Sprintf("CREATE DATABASE \"%s\";", consumer.Spec.Consumer.Database)
-	_, err = db.Exec(createDB)
-	if err != nil {
-		return err
-	}
+
 	// @TODO: check the equivalent of of create if not exists
 	createUser := fmt.Sprintf("CREATE USER \"%s\" WITH ENCRYPTED PASSWORD '%s';", userName[0], consumer.Spec.Consumer.Password)
 	_, err = db.Exec(createUser)
 	if err != nil {
-		// if user creation fails, drop the database that gets created
-		dropErr := dropDatabase(db, consumer.Spec.Consumer.Database)
-		if dropErr != nil {
-			return fmt.Errorf("unable drop database after failed user creation: %v", dropErr)
-		}
 		return fmt.Errorf("unable to create user %s, dropped database %s: %v", consumer.Spec.Consumer.Username, consumer.Spec.Consumer.Database, err)
 	}
-	grantUser := fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE \"%s\" TO \"%s\";", consumer.Spec.Consumer.Database, userName[0])
-	_, err = db.Exec(grantUser)
+	grantUserControl := fmt.Sprintf("GRANT \"%s\" TO \"%s\";", userName[0], provider.Username)
+	_, err = db.Exec(grantUserControl)
 	if err != nil {
-		// if grants fails, drop the database and user that gets created
-		dropErr := dropDatabase(db, consumer.Spec.Consumer.Database)
-		if dropErr != nil {
-			return fmt.Errorf("unable drop database after failed user grant: %v", dropErr)
-		}
-		dropErr = dropUser(db, consumer, provider)
-		if dropErr != nil {
-			return fmt.Errorf("unable drop user after failed user grant: %v", dropErr)
-		}
-		return fmt.Errorf("unable to grant user %s permissions on database %s: %v", userName[0], consumer.Spec.Consumer.Database, err)
-	}
-	var changeOwner string
-	changeOwner = fmt.Sprintf("ALTER DATABASE \"%s\" OWNER TO \"%s\";", consumer.Spec.Consumer.Database, userName[0])
-	_, err = db.Exec(changeOwner)
-	if err != nil {
-		// if change ownership fails, drop the database and user that gets created
-		dropErr := dropDatabase(db, consumer.Spec.Consumer.Database)
-		if dropErr != nil {
-			return fmt.Errorf("Unable drop database after failed ownership change: %v", dropErr)
-		}
-		dropErr = dropUser(db, consumer, provider)
+		dropErr := dropUser(db, consumer, provider)
 		if dropErr != nil {
 			return fmt.Errorf("Unable drop user after failed ownership change: %v", dropErr)
 		}
-		return fmt.Errorf("Unable to change owner of database %s to %s: %v", consumer.Spec.Consumer.Database, userName[0], err)
+		return fmt.Errorf("Unable to grant user %s to provider : %v", userName[0], err)
 	}
+	// @TODO: check the equivalent of of create if not exists
+	createDB := fmt.Sprintf("CREATE DATABASE \"%s\" OWNER \"%s\";", consumer.Spec.Consumer.Database, userName[0])
+	_, err = db.Exec(createDB)
+	if err != nil {
+		dropErr := dropUser(db, consumer, provider)
+		if dropErr != nil {
+			return fmt.Errorf("Unable drop user after failed ownership change: %v", dropErr)
+		}
+		return fmt.Errorf("Unable to create database %s : %v", consumer.Spec.Consumer.Database, err)
+	}
+
 	return nil
 }
 

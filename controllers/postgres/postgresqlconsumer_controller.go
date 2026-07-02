@@ -366,6 +366,40 @@ func createDatabaseIfNotExist(provider postgresv1.PostgreSQLProviderSpec, consum
 		return fmt.Errorf("Unable to create database %s : %v", consumer.Spec.Consumer.Database, err)
 	}
 
+	// PostgreSQL 15+ no longer grants CREATE on the public schema to PUBLIC by
+	// default, so the new user cannot create objects in its database even though
+	// it owns the database. Grant the required privileges on the public schema.
+	// Schema grants are per-database, so this needs a fresh connection to the
+	// newly created database (the connection above is to the "postgres" database).
+	err = grantPublicSchema(provider, consumer, userName[0])
+	if err != nil {
+		dropErr := dropDatabase(db, consumer.Spec.Consumer.Database)
+		if dropErr != nil {
+			return fmt.Errorf("unable drop database after failed schema grant: %v", dropErr)
+		}
+		dropErr = dropUser(db, consumer, provider)
+		if dropErr != nil {
+			return fmt.Errorf("unable drop user after failed schema grant: %v", dropErr)
+		}
+		return fmt.Errorf("unable to grant public schema privileges to user %s: %v", userName[0], err)
+	}
+
+	return nil
+}
+
+func grantPublicSchema(provider postgresv1.PostgreSQLProviderSpec, consumer postgresv1.PostgreSQLConsumer, userName string) error {
+	sslMode := "disable"
+	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s "+"password=%s dbname=%s sslmode=%s", provider.Hostname, provider.Port, provider.Username, provider.Password, consumer.Spec.Consumer.Database, sslMode)
+	db, err := sql.Open("postgres", psqlInfo)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	grantSchema := fmt.Sprintf("GRANT ALL ON SCHEMA public TO \"%s\";", userName)
+	_, err = db.Exec(grantSchema)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

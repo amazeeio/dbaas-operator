@@ -1,4 +1,7 @@
 domain: amazee.io
+layout:
+- go.kubebuilder.io/v3
+projectName: dbaas-operator
 repo: github.com/amazeeio/dbaas-operator
 resources:
 - group: mariadb
@@ -7,5 +10,5 @@ resources:
 - group: mariadb
   kind: MariaDBProvider
   version: v1
-version: "2"
+version: "3"
 multigroup: true

@@ -39,7 +39,7 @@ spec:
       - command:
         - /manager
         args:
-        - --enable-leader-election
+        - --leader-elect
         image: controller:latest
         name: manager
         ports:
@@ -52,4 +52,5 @@ spec:
           requests:
             cpu: 100m
             memory: 200Mi
+      serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

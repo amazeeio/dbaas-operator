@@ -162,7 +162,7 @@ spec:
     spec:
       containers:
       - name: mongodb
-        image: mongo:4.2.3
+        image: mongo:9.0.4
         imagePullPolicy: IfNotPresent
         env:
         - name: MONGO_INITDB_ROOT_USERNAME

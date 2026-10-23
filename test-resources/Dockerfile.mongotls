@@ -1,4 +1,4 @@
-FROM mongo:4.2.3
+FROM mongo:9.0.4
 
 # generate a self signed mongodb with tls support
 

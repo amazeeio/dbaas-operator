@@ -107,7 +107,7 @@ func postgresDatabases() []string {
 }
 
 func tryMongoDatabases(deployment string, tls bool) ([]string, error) {
-	args := []string{"exec", "-n", providerNamespace, "deploy/" + deployment, "--", "mongo"}
+	args := []string{"exec", "-n", providerNamespace, "deploy/" + deployment, "--", "mongosh"}
 	if tls {
 		args = append(args, "--tls", "--tlsAllowInvalidCertificates", "--tlsAllowInvalidHostnames")
 	}

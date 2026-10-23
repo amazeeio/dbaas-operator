@@ -16,10 +16,12 @@ const (
 	operatorImage     = "amazeeio/dbaas-operator:test-tag"
 	operatorNamespace = "dbaas-operator-system"
 	backendURL        = "http://dbaas-operator-controller-backend.dbaas-operator-system.svc:5000"
-	mariadbHost       = "local-dbaas-mariadb-provider"
-	mariadbMultiHost  = "local-dbaas-provider-mariadb-multi"
-	mongoURI          = "mongodb://root:password@mongodb.172.17.0.1.nip.io:27017/"
-	mongoTLSURI       = "mongodb://root:password@mongodb.172.17.0.1.nip.io:27018/"
+	providerNamespace = "dbaas-providers"
+	mongoTLSImage     = "dbaas-test/mongotls:test"
+	mariadbHost       = "mariadb"
+	mariadbMultiHost  = "mariadb-multi"
+	mongoHost         = "mongodb"
+	mongoTLSHost      = "mongodb-tls"
 	providerTimeout   = 3 * time.Minute
 	reconcileTimeout  = 2 * time.Minute
 	poll              = 3 * time.Second
@@ -86,7 +88,7 @@ func expectProviderFound(path string, found bool) {
 }
 
 func mysqlExec(host, query string) (string, error) {
-	return utils.Compose("exec", "-T", "mysql", "mysql", "--host="+host, "--port=3306", "-uroot", "-qfsBNe", query)
+	return utils.RunKubectl("exec", "-n", providerNamespace, "deploy/"+host, "--", "mysql", "-uroot", "-ppassword", "-qfsBNe", query)
 }
 
 func mariadbDatabases(host string) []string {
@@ -98,22 +100,30 @@ func mariadbDatabases(host string) []string {
 
 func postgresDatabases() []string {
 	ginkgo.GinkgoHelper()
-	output, err := utils.Compose("exec", "-T", "local-dbaas-psql-provider", "psql", "-h", "localhost", "-p", "5432",
+	output, err := utils.RunKubectl("exec", "-n", providerNamespace, "deploy/postgres", "--", "psql", "-h", "localhost", "-p", "5432",
 		"-U", "postgres", "postgres", "--no-align", "--tuples-only", "-c", "SELECT datname FROM pg_database;")
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	return utils.GetNonEmptyLines(output)
 }
 
-func mongoDatabases(service, uri string, tls bool) []string {
-	ginkgo.GinkgoHelper()
-	args := []string{"exec", "-T", service, "mongo"}
+func tryMongoDatabases(deployment string, tls bool) ([]string, error) {
+	args := []string{"exec", "-n", providerNamespace, "deploy/" + deployment, "--", "mongo"}
 	if tls {
 		args = append(args, "--tls", "--tlsAllowInvalidCertificates", "--tlsAllowInvalidHostnames")
 	}
-	args = append(args, uri, "--quiet", "--eval", "db.getMongo().getDBNames().forEach(function(db){print(db)})")
-	output, err := utils.Compose(args...)
+	args = append(args, "mongodb://root:password@localhost:27017/", "--quiet", "--eval", "db.getMongo().getDBNames().forEach(function(db){print(db)})")
+	output, err := utils.RunKubectl(args...)
+	if err != nil {
+		return nil, err
+	}
+	return utils.GetNonEmptyLines(output), nil
+}
+
+func mongoDatabases(deployment string, tls bool) []string {
+	ginkgo.GinkgoHelper()
+	databases, err := tryMongoDatabases(deployment, tls)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
-	return utils.GetNonEmptyLines(output)
+	return databases
 }
 
 func waitForDatabaseName(resource string) string {
@@ -147,7 +157,7 @@ func expectServices(resource string, replicas bool) {
 
 func execMariadb(host, query string) {
 	ginkgo.GinkgoHelper()
-	_, err := utils.Compose("exec", "-T", "mysql", "mysql", "--host="+host, "--port=3306", "-uroot", "-e", query)
+	_, err := utils.RunKubectl("exec", "-n", providerNamespace, "deploy/"+host, "--", "mysql", "-uroot", "-ppassword", "-e", query)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 }
 
@@ -174,8 +184,13 @@ func mariadbConsumerLifecycle(file, name, host string) {
 var _ = ginkgo.Describe("dbaas-operator", ginkgo.Ordered, func() {
 	ginkgo.BeforeAll(func() {
 		ginkgo.By("starting the local database providers")
-		_, err := utils.Compose("up", "-d", "--build")
+		_, err := utils.Run("docker", "build", "-f", "test-resources/Dockerfile.mongotls", "-t", mongoTLSImage, "test-resources")
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		gomega.Expect(utils.LoadImageToKindClusterWithName(mongoTLSImage)).To(gomega.Succeed())
+		apply("test-resources/providers.yaml")
+		for _, name := range []string{"mariadb", "mariadb-multi", "postgres", "mongodb", "mongodb-tls"} {
+			kubectl("rollout", "status", "deployment", "-n", providerNamespace, name, "--timeout=180s")
+		}
 		gomega.Eventually(func() error {
 			_, err := mysqlExec(mariadbHost, "SHOW DATABASES;")
 			return err
@@ -184,9 +199,9 @@ var _ = ginkgo.Describe("dbaas-operator", ginkgo.Ordered, func() {
 			_, err := mysqlExec(mariadbMultiHost, "SHOW DATABASES;")
 			return err
 		}, providerTimeout, 5*time.Second).Should(gomega.Succeed())
-		gomega.Eventually(func() []string { return postgresDatabases() }, providerTimeout, 5*time.Second).Should(gomega.ContainElement("postgres"))
-		gomega.Eventually(func() []string { return mongoDatabases("local-dbaas-mongo-provider", mongoURI, false) }, providerTimeout, 5*time.Second).Should(gomega.ContainElement("admin"))
-		gomega.Eventually(func() []string { return mongoDatabases("local-dbaas-mongo-tls-provider", mongoTLSURI, true) }, providerTimeout, 5*time.Second).Should(gomega.ContainElement("admin"))
+		gomega.Eventually(func() []string { out, _ := utils.RunKubectl("exec", "-n", providerNamespace, "deploy/postgres", "--", "psql", "-U", "postgres", "-tAc", "SELECT datname FROM pg_database;"); return utils.GetNonEmptyLines(out) }, providerTimeout, 5*time.Second).Should(gomega.ContainElement("postgres"))
+		gomega.Eventually(func() []string { databases, _ := tryMongoDatabases(mongoHost, false); return databases }, providerTimeout, 5*time.Second).Should(gomega.ContainElement("admin"))
+		gomega.Eventually(func() []string { databases, _ := tryMongoDatabases(mongoTLSHost, true); return databases }, providerTimeout, 5*time.Second).Should(gomega.ContainElement("admin"))
 
 		ginkgo.By("building and deploying the operator")
 		_, err = utils.Run("docker", "build", ".", "-t", operatorImage)
@@ -205,7 +220,7 @@ var _ = ginkgo.Describe("dbaas-operator", ginkgo.Ordered, func() {
 			_, _ = utils.RunKubectl("delete", kind, "--all", "--ignore-not-found", "--timeout=60s")
 		}
 		_, _ = utils.Run("make", "undeploy-operator")
-		_, _ = utils.Compose("down")
+		_, _ = utils.RunKubectl("delete", "-f", "test-resources/providers.yaml", "--ignore-not-found", "--wait=false")
 	})
 
 	ginkgo.AfterEach(func() {
@@ -291,20 +306,20 @@ var _ = ginkgo.Describe("dbaas-operator", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.Context("MongoDB", func() {
-		lifecycle := func(file, name, service, uri string, tls bool) {
+		lifecycle := func(file, name, service string, tls bool) {
 			resource := "mongodbconsumer/" + name
 			apply(file)
 			dbName := waitForDatabaseName(resource)
-			gomega.Expect(mongoDatabases(service, uri, tls)).To(gomega.ContainElement(dbName))
+			gomega.Expect(mongoDatabases(service, tls)).To(gomega.ContainElement(dbName))
 			expectServices(resource, false)
 			deleteFile(file)
-			gomega.Expect(mongoDatabases(service, uri, tls)).NotTo(gomega.ContainElement(dbName))
+			gomega.Expect(mongoDatabases(service, tls)).NotTo(gomega.ContainElement(dbName))
 		}
 
 		ginkgo.It("finds a provider and manages a consumer", func() {
 			apply("test-resources/mongodb/provider.yaml")
 			expectProviderFound("/mongodb/test", true)
-			lifecycle("test-resources/mongodb/consumer.yaml", "mongodbconsumer-testing", "local-dbaas-mongo-provider", mongoURI, false)
+			lifecycle("test-resources/mongodb/consumer.yaml", "mongodbconsumer-testing", mongoHost, false)
 		})
 
 		ginkgo.It("fails a consumer with a non existing environment type", func() {
@@ -316,7 +331,7 @@ var _ = ginkgo.Describe("dbaas-operator", ginkgo.Ordered, func() {
 		ginkgo.It("manages a consumer using a TLS provider", func() {
 			apply("test-resources/mongodb/provider-tls.yaml")
 			expectProviderFound("/mongodb/tls-test", true)
-			lifecycle("test-resources/mongodb/consumer-tls.yaml", "mongodbconsumer-tls-testing", "local-dbaas-mongo-tls-provider", mongoTLSURI, true)
+			lifecycle("test-resources/mongodb/consumer-tls.yaml", "mongodbconsumer-tls-testing", mongoTLSHost, true)
 		})
 	})
 })

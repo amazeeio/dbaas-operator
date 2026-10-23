@@ -53,11 +53,6 @@ func RunKubectl(args ...string) (string, error) {
 	return Run(Kubectl(), args...)
 }
 
-// Compose runs a docker compose command.
-func Compose(args ...string) (string, error) {
-	return Run("docker", append([]string{"compose"}, args...)...)
-}
-
 // LoadImageToKindClusterWithName loads a local docker image into the kind cluster.
 func LoadImageToKindClusterWithName(name string) error {
 	_, err := Run(Kind(), "load", "docker-image", name, "--name", KindCluster())

@@ -4,11 +4,11 @@ metadata:
   name: mariadbprovider-testing-multi1
 spec:
   environment: multi
-  hostname: multi1.mariadb.172.17.0.1.nip.io
+  hostname: mariadb.dbaas-providers.svc
   readReplicaHostnames:
-  - multi1.mariadb.172.17.0.1.nip.io
+  - mariadb.dbaas-providers.svc
   password: password
-  port: '33066'
+  port: '3306'
   user: root
 ---
 apiVersion: mariadb.amazee.io/v1
@@ -17,9 +17,9 @@ metadata:
   name: mariadbprovider-testing-multi2
 spec:
   environment: multi
-  hostname: multi2.mariadb.172.17.0.1.nip.io
+  hostname: mariadb-multi.dbaas-providers.svc
   readReplicaHostnames:
-  - multi2.mariadb.172.17.0.1.nip.io
+  - mariadb-multi.dbaas-providers.svc
   password: password
-  port: '33067'
+  port: '3306'
   user: root

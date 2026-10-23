@@ -4,9 +4,9 @@ metadata:
   name: mariadbprovider-testing
 spec:
   environment: test
-  hostname: mariadb.172.17.0.1.nip.io
+  hostname: mariadb.dbaas-providers.svc
   readReplicaHostnames:
-  - mariadb.172.17.0.1.nip.io
+  - mariadb.dbaas-providers.svc
   password: password
-  port: '33066'
+  port: '3306'
   user: root

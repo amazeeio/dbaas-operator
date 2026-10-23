@@ -9,9 +9,9 @@ spec:
     password: testdb
     username: testdb
   provider:
-    hostname: mariadb.172.17.0.1.nip.io
+    hostname: mariadb.dbaas-providers.svc
     name: mariadbprovider-testing
     namespace: default
-    port: "33066"
+    port: "3306"
     readReplicas:
-    - mariadb.172.17.0.1.nip.io
+    - mariadb.dbaas-providers.svc

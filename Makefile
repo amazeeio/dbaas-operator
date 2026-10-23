@@ -160,7 +160,6 @@ kind/re-test-e2e: local-dev/tools
 
 .PHONY: kind/clean
 kind/clean: local-dev/tools
-	docker compose down
 	$(KIND) delete cluster --name=$(KIND_CLUSTER)
 
 # Run the e2e tests against the current kubeconfig context (needs a kind cluster)

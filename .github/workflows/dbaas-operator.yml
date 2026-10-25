@@ -39,4 +39,4 @@ jobs:
         kubectl_version: v1.32.2
     - name: Run Tests
       run: |
-        make github/test-e2e KIND_CLUSTER=chart-testing
+        make github/test-e2e KIND_CLUSTER=kind

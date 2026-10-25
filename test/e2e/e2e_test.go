@@ -100,14 +100,14 @@ func mariadbDatabases(host string) []string {
 
 func postgresDatabases() []string {
 	ginkgo.GinkgoHelper()
-	output, err := utils.RunKubectl("exec", "-n", providerNamespace, "deploy/postgres", "--", "psql", "-h", "localhost", "-p", "5432",
+	output, err := utils.RunKubectl("exec", "-n", providerNamespace, "deploy/postgres", "--", "env", "PGPASSWORD=password", "psql", "-h", "localhost", "-p", "5432",
 		"-U", "postgres", "postgres", "--no-align", "--tuples-only", "-c", "SELECT datname FROM pg_database;")
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	return utils.GetNonEmptyLines(output)
 }
 
 func tryMongoDatabases(deployment string, tls bool) ([]string, error) {
-	args := []string{"exec", "-n", providerNamespace, "deploy/" + deployment, "--", "mongosh"}
+	args := []string{"exec", "-n", providerNamespace, "deploy/" + deployment, "--", "mongo"}
 	if tls {
 		args = append(args, "--tls", "--tlsAllowInvalidCertificates", "--tlsAllowInvalidHostnames")
 	}
@@ -216,8 +216,8 @@ var _ = ginkgo.Describe("dbaas-operator", ginkgo.Ordered, func() {
 
 	ginkgo.AfterAll(func() {
 		_, _ = utils.RunKubectl("delete", "-f", "test-resources/busybox.yaml", "--ignore-not-found", "--wait=false")
-		for _, kind := range []string{"mariadbconsumers", "postgresqlconsumers", "mongodbconsumers", "mariadbproviders", "postgresqlproviders", "mongodbproviders"} {
-			_, _ = utils.RunKubectl("delete", kind, "--all", "--ignore-not-found", "--timeout=60s")
+		for _, dir := range []string{"mariadb", "postgres", "mongodb"} {
+			_, _ = utils.RunKubectl("delete", "-f", "test-resources/"+dir, "--ignore-not-found", "--timeout=60s")
 		}
 		_, _ = utils.Run("make", "undeploy-operator")
 		_, _ = utils.RunKubectl("delete", "-f", "test-resources/providers.yaml", "--ignore-not-found", "--wait=false")
@@ -275,7 +275,7 @@ var _ = ginkgo.Describe("dbaas-operator", ginkgo.Ordered, func() {
 		ginkgo.It("does not create databases for azure consumers with a long hostname", func() {
 			file := "test-resources/mariadb/consumer-azure-long.yaml"
 			apply(file)
-			time.Sleep(10 * time.Second)
+			expectConsumerFails("mariadbconsumer/mariadbconsumer-testing-azure-long")
 			deleteFile(file)
 			for _, db := range mariadbDatabases(mariadbHost) {
 				gomega.Expect(db).To(gomega.BeElementOf("information_schema", "db", "performance_schema", "mysql", "sys"))

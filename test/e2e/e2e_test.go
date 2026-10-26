@@ -278,7 +278,7 @@ var _ = ginkgo.Describe("dbaas-operator", ginkgo.Ordered, func() {
 			expectConsumerFails("mariadbconsumer/mariadbconsumer-testing-azure-long")
 			deleteFile(file)
 			for _, db := range mariadbDatabases(mariadbHost) {
-				gomega.Expect(db).To(gomega.BeElementOf("information_schema", "db", "performance_schema", "mysql", "sys"))
+				gomega.Expect(db).To(gomega.BeElementOf([]string{"information_schema", "db", "performance_schema", "mysql", "sys"}))
 			}
 		})
 	})

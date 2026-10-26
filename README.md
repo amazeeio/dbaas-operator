@@ -18,13 +18,15 @@ It allows for provisiong and deprovisioning of shared MySQL/MariaDB, PostgreSQL,
 * MongoDBConsumer - These contain the specific connection details for a consumer, multiple consumers can be defined in the one namespace and each will get their own specific service endpoints created pointing to the provider.
 
 ## Test It Out
-This will spin up a local mysql, postgresql, and mongodb provider. A kind cluster is started, and the operator is installed, then some basic tests are performed to confirm the providers and consumer provisioning and deprovisioning is successful.
+This will spin up a local mysql, postgresql, and mongodb provider. The Ginkgo e2e suite (test/e2e) runs against a kind cluster, and the operator is installed, then some basic tests are performed to confirm the providers and consumer provisioning and deprovisioning is successful.
 
 ### Running the tests directly
 ```
-make operator-test
+make kind/test-e2e
+# re-run the suite against the existing kind cluster
+make kind/re-test-e2e
 # if at anypoint you need to clean up
-make clean
+make kind/clean
 ```
 
 ## Code references

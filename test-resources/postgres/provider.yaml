@@ -4,7 +4,7 @@ metadata:
   name: postgresprovider-testing
 spec:
   environment: test
-  hostname: postgres.172.17.0.1.nip.io
+  hostname: postgres.dbaas-providers.svc
   password: password
   port: '5432'
   user: root

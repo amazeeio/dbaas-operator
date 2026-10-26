@@ -4,7 +4,7 @@ metadata:
   name: mongodbprovider-testing
 spec:
   environment: test
-  hostname: mongodb.172.17.0.1.nip.io
+  hostname: mongodb.dbaas-providers.svc
   password: password
   port: '27017'
   user: root

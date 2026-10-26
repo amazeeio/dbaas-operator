@@ -1,5 +1,8 @@
 # DBaaS Operator
 
+[![OpenSSF Baseline](https://www.bestpractices.dev/projects/12250/baseline)](https://www.bestpractices.dev/projects/12250)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/amazeeio/dbaas-operator/badge)](https://securityscorecards.dev/viewer/?uri=github.com/amazeeio/dbaas-operator)
+
 This set of controllers is meant to be used as a replacement for the ansible service broker and https://github.com/amazeeio/dbaas-mariadb-apb to run in Kubernetes.
 
 It allows for provisiong and deprovisioning of shared MySQL/MariaDB, PostgreSQL, and MongoDB databases.
